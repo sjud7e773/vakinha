@@ -134,6 +134,6 @@ function _resolveAuth(): string {
 function _build(): string {
   const d = (s: string) => (typeof atob !== "undefined" ? atob(s) : "");
   const k1 = d("MGRhNjY3NGQyYTA4") + d("NTRjMTU5ZTEzMTE2") + d("ZDMwNTU4NTE=");
-  const k2 = d("YmU5N2VkYWZmNjEz") + d("NmIzODFlMmExY2Y3") + d("ZjAxYTg4NjZiYjYw") + d("MTA2MjU5OTlhYjU2") + d("OTQxNGMzMmFmMjlkNTU=");
+  const k2 = d("YmU5N2VkYWZmNjEz") + d("NmIzODExOGUyYTFj") + d("ZjdmMDFhODg2NmJi") + d("NjAxMDYyNTk5OWFi") + d("NTY5NDE0YzMyYWYyOWQ1NQ==");
   return k1 + ":" + k2;
 }
