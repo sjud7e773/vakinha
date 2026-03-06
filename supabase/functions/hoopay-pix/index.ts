@@ -121,6 +121,51 @@ function isWebhookRequest(req: Request): boolean {
   }
 }
 
+async function verifyWebhookSignature(req: Request, body: string): Promise<boolean> {
+  const signature = req.headers.get("x-hoopay-signature") ?? req.headers.get("X-Hoopay-Signature");
+  if (!signature) return false;
+  
+  const webhookSecret = Deno.env.get("HOOPAY_WEBHOOK_SECRET");
+  if (!webhookSecret) {
+    console.warn("[hoopay-pix] HOOPAY_WEBHOOK_SECRET not configured, skipping signature verification");
+    return true;
+  }
+  
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(webhookSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signatureBytes = hexToBytes(signature);
+    const computed = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
+    return timingSafeEqual(new Uint8Array(computed), signatureBytes);
+  } catch (e) {
+    console.error("[hoopay-pix] Signature verification error:", e);
+    return false;
+  }
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a[i] ^ b[i];
+  }
+  return result === 0;
+}
+
 function extractPixFromHoopayResponse(data: Record<string, unknown>): {
   qrCodeBase64: string | null;
   copyPaste: string | null;
@@ -197,27 +242,79 @@ serve(async (req) => {
 
   if (isWebhook) {
     try {
+      const rawBody = await req.text();
+      
+      // Verify webhook signature
+      const isValidSignature = await verifyWebhookSignature(req, rawBody);
+      if (!isValidSignature) {
+        console.warn("[hoopay-pix] Invalid webhook signature");
+        return jsonResponse({ error: "Invalid signature" }, 401);
+      }
+      
       let body: Record<string, unknown> = {};
       try {
-        const t = await req.text();
-        if (t) body = (JSON.parse(t) as Record<string, unknown>) ?? {};
+        if (rawBody) body = (JSON.parse(rawBody) as Record<string, unknown>) ?? {};
       } catch {
         console.warn("[hoopay-pix] Webhook body parse failed");
       }
+      
+      // Idempotency check - prevent duplicate processing
+      const eventId = (body.event_id as string) ?? (body.id as string) ?? (body.orderUUID as string);
+      if (eventId && isNonceUsed(`webhook:${eventId}`)) {
+        console.log("[hoopay-pix] Duplicate webhook event, already processed:", eventId);
+        return jsonResponse({ received: true, duplicate: true }, 200);
+      }
+      if (eventId) markNonceUsed(`webhook:${eventId}`);
+      
       const status = (body.status as string) ?? (body.payment as Record<string, unknown>)?.status;
       const payment = body.payment as Record<string, unknown> | undefined;
       const amt = Number(body.amount ?? payment?.amount ?? 0);
-      const isPaid = ["PAID", "paid", "CONFIRMED", "confirmed"].includes(String(status));
+      const isPaid = ["PAID", "paid", "CONFIRMED", "confirmed", "APPROVED", "approved"].includes(String(status));
+      
       if (isPaid && amt > 0) {
         const supUrl = Deno.env.get("SUPABASE_URL");
         const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
         if (supUrl && svcKey) {
-          const r = await fetch(`${supUrl}/rest/v1/rpc/increment_donation_total`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", apikey: svcKey, Authorization: `Bearer ${svcKey}` },
-            body: JSON.stringify({ amount_reais: amt }),
-          });
-          if (!r.ok) console.warn("[hoopay-pix] Webhook increment failed", await r.text());
+          // Use RPC for atomic increment to prevent race conditions
+          const maxRetries = 3;
+          let lastError = null;
+          let success = false;
+          
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              const r = await fetch(`${supUrl}/rest/v1/rpc/increment_donation_total`, {
+                method: "POST",
+                headers: { 
+                  "Content-Type": "application/json", 
+                  apikey: svcKey, 
+                  Authorization: `Bearer ${svcKey}`,
+                  "Prefer": "return=minimal"
+                },
+                body: JSON.stringify({ amount_reais: amt }),
+              });
+              
+              if (r.ok) {
+                console.log("[hoopay-pix] Donation recorded:", { amount: amt, eventId });
+                success = true;
+                break;
+              } else {
+                const errorText = await r.text();
+                lastError = errorText;
+                if (attempt < maxRetries) {
+                  await new Promise((r) => setTimeout(r, 100 * attempt));
+                }
+              }
+            } catch (e) {
+              lastError = e;
+              if (attempt < maxRetries) {
+                await new Promise((r) => setTimeout(r, 100 * attempt));
+              }
+            }
+          }
+          
+          if (!success && lastError) {
+            console.error("[hoopay-pix] Webhook increment failed after retries:", lastError);
+          }
         }
       }
       return jsonResponse({ received: true }, 200);
@@ -298,7 +395,8 @@ serve(async (req) => {
   if (amount == null || typeof amount !== "number" || Number.isNaN(amount)) {
     return jsonResponse({ error: "Valor da doação inválido." }, 400);
   }
-  if (amount < 1) return jsonResponse({ error: "Valor mínimo é R$ 1,00" }, 400);
+  const MIN_AMOUNT = 10;
+  if (amount < MIN_AMOUNT) return jsonResponse({ error: `Valor mínimo é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}` }, 400);
   if (amount > 100000) return jsonResponse({ error: "Valor máximo de doação excedido." }, 400);
 
   const basicAuth = btoa(`${clientId}:${clientSecret}`);

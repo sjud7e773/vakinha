@@ -69,10 +69,21 @@ const HeartsPurchase = ({ isOpen, onClose }: HeartsPurchaseProps) => {
     }
   };
 
-  const totalAmount = selectedPlan ? selectedPlan.price * quantity : 0;
+  const MIN_AMOUNT = 10;
+  const totalAmount = selectedPlan ? Math.max(selectedPlan.price * quantity, MIN_AMOUNT) : 0;
 
   const handleBuy = async () => {
     if (!selectedPlan) return;
+
+    // Validate minimum amount
+    if (totalAmount < MIN_AMOUNT) {
+      toast({ 
+        title: "Valor mínimo não atingido", 
+        description: `O valor mínimo para compra é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}`,
+        variant: "destructive" 
+      });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -129,29 +140,65 @@ const HeartsPurchase = ({ isOpen, onClose }: HeartsPurchaseProps) => {
     if (!selectedPlan) return;
 
     try {
-      // Update hearts count in database
-      const { data: currentStats } = await supabase
-        .from("campaign_stats")
-        .select("heart_count, total_raised")
-        .eq("id", 1)
-        .single();
-
-      const newHeartCount = (currentStats?.heart_count ?? 0) + (selectedPlan.quantity * quantity);
-      const newTotalRaised = (currentStats?.total_raised ?? 0) + totalAmount;
-
-      await supabase
-        .from("campaign_stats")
-        .update({
-          heart_count: newHeartCount,
-          total_raised: newTotalRaised,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", 1);
+      // Use RPC for atomic increment to prevent race conditions
+      const heartsToAdd = selectedPlan.quantity * quantity;
+      const amountToAdd = totalAmount;
+      
+      // Call the RPC function to atomically update stats
+      const { error: rpcError } = await supabase.rpc("increment_campaign_stats", {
+        hearts_to_add: heartsToAdd,
+        amount_to_add: amountToAdd,
+      });
+      
+      if (rpcError) {
+        console.error("[HeartsPurchase] RPC error:", rpcError);
+        // Fallback to direct update with retry logic
+        await updateStatsWithRetry(heartsToAdd, amountToAdd);
+      }
 
       setStep("thankyou");
     } catch (error) {
-      console.error("Error updating stats:", error);
+      console.error("[HeartsPurchase] Error updating stats:", error);
+      // Still show thank you even if update fails
       setStep("thankyou");
+    }
+  };
+
+  // Fallback function with retry logic for race condition prevention
+  const updateStatsWithRetry = async (heartsToAdd: number, amountToAdd: number, maxRetries = 3): Promise<void> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Get current stats
+        const { data: currentStats, error: fetchError } = await supabase
+          .from("campaign_stats")
+          .select("heart_count, total_raised")
+          .eq("id", 1)
+          .single();
+        
+        if (fetchError) throw fetchError;
+
+        const newHeartCount = (currentStats?.heart_count ?? 0) + heartsToAdd;
+        const newTotalRaised = (currentStats?.total_raised ?? 0) + amountToAdd;
+
+        const { error: updateError } = await supabase
+          .from("campaign_stats")
+          .update({
+            heart_count: newHeartCount,
+            total_raised: newTotalRaised,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", 1);
+
+        if (!updateError) return; // Success
+        throw updateError;
+      } catch (error) {
+        if (attempt === maxRetries) {
+          console.error("[HeartsPurchase] Failed to update stats after retries:", error);
+          throw error;
+        }
+        // Exponential backoff
+        await new Promise(r => setTimeout(r, 100 * Math.pow(2, attempt - 1)));
+      }
     }
   };
 

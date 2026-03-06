@@ -32,11 +32,12 @@ interface DonationPageProps {
 }
 
 const HONEYPOT_FIELD_NAME = "website";
+const MIN_AMOUNT = 10;
 const MAX_AMOUNT = 100_000;
 
 function validateAmount(amount: number): { valid: boolean; error?: string } {
   if (typeof amount !== "number" || Number.isNaN(amount)) return { valid: false, error: "Valor inválido." };
-  if (amount < 1) return { valid: false, error: "Valor mínimo é R$ 1,00" };
+  if (amount < MIN_AMOUNT) return { valid: false, error: `Valor mínimo é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}` };
   if (amount > MAX_AMOUNT) return { valid: false, error: "Valor máximo excedido." };
   return { valid: true };
 }
@@ -69,8 +70,8 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
   };
 
   const handleContribute = () => {
-    if (amount < 1) {
-      toast({ title: "Valor mínimo é R$ 1,00", variant: "destructive" });
+    if (amount < MIN_AMOUNT) {
+      toast({ title: `Valor mínimo é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}`, variant: "destructive" });
       return;
     }
     if (selectedTurbine === null) setStep("turbine");
@@ -317,7 +318,7 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
         {simplifiedMode ? (
           <div className="w-full bg-muted text-muted-foreground py-4 rounded-xl font-medium text-center mb-5">Para doar, acesse por um navegador comum.</div>
         ) : (
-          <button onClick={handleContribute} disabled={loading || amount < 1} className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-extrabold disabled:opacity-50 hover:opacity-90 transition-opacity mb-5">
+          <button onClick={handleContribute} disabled={loading || amount < MIN_AMOUNT} className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-extrabold disabled:opacity-50 hover:opacity-90 transition-opacity mb-5">
             {loading ? "PROCESSANDO..." : "CONTRIBUIR"}
           </button>
         )}
@@ -328,6 +329,9 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
             ))}
           </div>
           <span className="text-sm text-muted-foreground ml-2">+1.542 apoiadores</span>
+        </div>
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <span className="text-xs text-muted-foreground">Valor mínimo: R$ 10,00</span>
         </div>
         <p className="text-xs text-center text-muted-foreground mb-6">
           Ao clicar no botão acima você declara que é maior de 18 anos e está de acordo com os <span className="text-primary font-semibold cursor-pointer">Termos</span>.
