@@ -48,10 +48,10 @@ export interface PixChargeOptions {
 
 export async function createChargePix(amount: number, options?: PixChargeOptions): Promise<PixChargeResult> {
   const auth = _resolveAuth();
+  // IMPORTANTE: NUNCA enviar is_heart_purchase ou heart_plan_id para API Hoopay
+  // Esses campos são apenas para uso interno da Edge Function
   const body = {
     amount,
-    is_heart_purchase: options?.isHeartPurchase ?? false,
-    heart_plan_id: options?.heartPlanId ?? null,
     customer: {
       email: "doador@vakinha.com",
       name: "Doador Anônimo",
