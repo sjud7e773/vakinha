@@ -8,7 +8,7 @@ No projeto Vercel → Settings → Environment Variables, configure:
 
 | Nome | Valor | Observação |
 |------|-------|------------|
-| `VITE_SUPABASE_URL` | `https://yxedewebfzpivfcfabes.supabase.co` | URL do projeto Supabase |
+| `VITE_SUPABASE_URL` | `https://kedpzpmswblzefavjunt.supabase.co` | URL do projeto Supabase |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | `eyJhbGci...` (anon key) | Chave pública do Supabase |
 
 Depois, faça um novo deploy (ou Redeploy) para aplicar as variáveis.

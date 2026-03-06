@@ -360,11 +360,11 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
           <span className="px-5 py-4 bg-muted text-muted-foreground font-bold text-sm border-r border-border">R$</span>
           <input type="text" inputMode="decimal" value={customAmount} onChange={handleCustomChange} placeholder="0,00" className="flex-1 px-5 py-4 text-foreground bg-background outline-none text-base font-semibold" />
         </div>
-        <div className="grid grid-cols-3 gap-3 mb-8">
+        <div className="grid grid-cols-3 gap-3 mb-8 overflow-visible">
           {PRESET_VALUES.map((val) => (
-            <button key={val} onClick={() => handleSelectPreset(val)} className={`relative py-4 rounded-xl border text-sm font-bold transition-all ${amount === val ? "border-primary text-primary bg-primary/5" : "border-border text-foreground hover:border-primary/50"}`}>
+            <button key={val} onClick={() => handleSelectPreset(val)} className={`relative py-4 rounded-xl border text-sm font-bold transition-all overflow-visible ${amount === val ? "border-primary text-primary bg-primary/5" : "border-border text-foreground hover:border-primary/50"}`}>
               R$ {val.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              {val === 100 && <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2.5 py-0.5 rounded-full font-extrabold">Doe com Amor 💛</span>}
+              {val === 100 && <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-primary text-primary-foreground text-[10px] px-2.5 py-0.5 rounded-full font-extrabold z-10">Doe com Amor 💛</span>}
             </button>
           ))}
         </div>
