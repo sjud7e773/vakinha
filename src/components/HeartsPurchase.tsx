@@ -77,7 +77,10 @@ const HeartsPurchase = ({ isOpen, onClose }: HeartsPurchaseProps) => {
     setLoading(true);
     try {
       // Corações não têm valor mínimo - usam o preço exato do plano
-      const result = await createChargePix(totalAmount, { isHeartPurchase: true });
+      const result = await createChargePix(totalAmount, { 
+        isHeartPurchase: true, 
+        heartPlanId: selectedPlan.id 
+      });
 
       if (result.success && (result.qr_code_base64 || result.copy_paste)) {
         setPixData({

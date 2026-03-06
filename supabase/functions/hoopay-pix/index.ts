@@ -166,6 +166,141 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return result === 0;
 }
 
+// ============== SISTEMA ANTI-SPAM E CACHE DE PIX ==============
+
+// Configurações Anti-Spam
+const ABUSE_PIX_LIMIT = 5; // máximo de PIX em 5 minutos
+const ABUSE_WINDOW_MS = 5 * 60 * 1000; // 5 minutos
+const ABUSE_BLOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutos de bloqueio
+
+// Helper para chamadas RPC do Supabase
+async function supabaseRpc(
+  supUrl: string,
+  svcKey: string,
+  functionName: string,
+  params: Record<string, unknown>
+): Promise<{ data: unknown; error: Error | null }> {
+  try {
+    const res = await fetch(`${supUrl}/rest/v1/rpc/${functionName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: svcKey,
+        Authorization: `Bearer ${svcKey}`,
+      },
+      body: JSON.stringify(params),
+    });
+    
+    if (!res.ok) {
+      const text = await res.text();
+      return { data: null, error: new Error(`RPC ${functionName} failed: ${text}`) };
+    }
+    
+    const data = await res.json();
+    return { data, error: null };
+  } catch (e) {
+    return { data: null, error: e as Error };
+  }
+}
+
+// Verifica se existe PIX ativo para reutilização
+async function checkExistingPix(
+  supUrl: string,
+  svcKey: string,
+  ip: string,
+  fingerprint: string,
+  operationType: string,
+  amount: number,
+  heartPlanId: number | null
+): Promise<{ exists: boolean; pix: { qr_code_base64: string; copy_paste: string; expires_at: string; order_uuid: string } | null }> {
+  const { data, error } = await supabaseRpc(supUrl, svcKey, "get_active_pix", {
+    p_ip: ip,
+    p_fingerprint: fingerprint || null,
+    p_operation_type: operationType,
+    p_amount: amount,
+    p_heart_plan_id: heartPlanId,
+  });
+  
+  if (error || !data || !Array.isArray(data) || data.length === 0) {
+    return { exists: false, pix: null };
+  }
+  
+  const pix = data[0];
+  return {
+    exists: true,
+    pix: {
+      qr_code_base64: pix.qr_code_base64,
+      copy_paste: pix.copy_paste,
+      expires_at: pix.expires_at,
+      order_uuid: pix.order_uuid,
+    },
+  };
+}
+
+// Verifica e registra abuso
+async function checkAbuse(
+  supUrl: string,
+  svcKey: string,
+  ip: string,
+  fingerprint: string
+): Promise<{ isBlocked: boolean; blockedUntil: string | null; reason: string }> {
+  const { data, error } = await supabaseRpc(supUrl, svcKey, "check_pix_abuse", {
+    p_ip: ip,
+    p_fingerprint: fingerprint || null,
+  });
+  
+  if (error || !data || !Array.isArray(data) || data.length === 0) {
+    return { isBlocked: false, blockedUntil: null, reason: "ok" };
+  }
+  
+  const result = data[0];
+  return {
+    isBlocked: result.is_blocked,
+    blockedUntil: result.blocked_until,
+    reason: result.reason,
+  };
+}
+
+// Salva PIX no cache
+async function savePixToCache(
+  supUrl: string,
+  svcKey: string,
+  ip: string,
+  fingerprint: string,
+  operationType: string,
+  amount: number,
+  heartPlanId: number | null,
+  qrCode: string,
+  copyPaste: string,
+  expiresAt: string,
+  orderUuid: string
+): Promise<void> {
+  await supabaseRpc(supUrl, svcKey, "save_pix_to_cache", {
+    p_ip: ip,
+    p_fingerprint: fingerprint || null,
+    p_operation_type: operationType,
+    p_amount: amount,
+    p_heart_plan_id: heartPlanId,
+    p_qr_code: qrCode,
+    p_copy_paste: copyPaste,
+    p_expires_at: expiresAt,
+    p_order_uuid: orderUuid,
+  });
+}
+
+// Marca PIX como pago (chamado pelo webhook)
+async function markPixAsPaid(
+  supUrl: string,
+  svcKey: string,
+  orderUuid: string
+): Promise<void> {
+  await supabaseRpc(supUrl, svcKey, "mark_pix_as_paid", {
+    p_order_uuid: orderUuid,
+  });
+}
+
+// ============== FIM SISTEMA ANTI-SPAM ==============
+
 function extractPixFromHoopayResponse(data: Record<string, unknown>): {
   qrCodeBase64: string | null;
   copyPaste: string | null;
@@ -275,6 +410,12 @@ serve(async (req) => {
         const supUrl = Deno.env.get("SUPABASE_URL");
         const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
         if (supUrl && svcKey) {
+          // Marca PIX como pago no cache (atualiza controle de abuso)
+          const orderUuid = (body.orderUUID ?? body.order_uuid) as string;
+          if (orderUuid) {
+            await markPixAsPaid(supUrl, svcKey, orderUuid);
+          }
+          
           // Use RPC for atomic increment to prevent race conditions
           const maxRetries = 3;
           let lastError = null;
@@ -384,6 +525,19 @@ serve(async (req) => {
   }
   markNonceUsed(powNonce);
 
+  const supUrl = Deno.env.get("SUPABASE_URL");
+  const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  // Verifica abuso antes de continuar
+  if (supUrl && svcKey) {
+    const abuseCheck = await checkAbuse(supUrl, svcKey, clientIp, fp);
+    if (abuseCheck.isBlocked) {
+      console.warn("[hoopay-pix] Abuso detectado:", { ip: clientIp, fp, blockedUntil: abuseCheck.blockedUntil });
+      // PUNIÇÃO DISCRETA: erro genérico sem revelar que está bloqueado
+      return jsonResponse({ error: "Não foi possível gerar o pagamento. Tente novamente mais tarde." }, 503);
+    }
+  }
+
   const clientId = Deno.env.get("HOOPAY_CLIENT_ID");
   const clientSecret = Deno.env.get("HOOPAY_CLIENT_SECRET");
   if (!clientId || !clientSecret) {
@@ -398,12 +552,32 @@ serve(async (req) => {
   
   // Corações não têm valor mínimo de R$10 - usam preço exato do plano
   const isHeartPurchase = body.is_heart_purchase === true;
+  const heartPlanId = isHeartPurchase ? (body.heart_plan_id as number || 1) : null;
   const MIN_AMOUNT = isHeartPurchase ? 0.01 : 10;
   
   if (!isHeartPurchase && amount < MIN_AMOUNT) {
     return jsonResponse({ error: `Valor mínimo é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}` }, 400);
   }
   if (amount > 100000) return jsonResponse({ error: "Valor máximo de doação excedido." }, 400);
+
+  // Verifica se existe PIX ativo para reutilizar
+  if (supUrl && svcKey) {
+    const operationType = isHeartPurchase ? "hearts" : "donation";
+    const existingPix = await checkExistingPix(supUrl, svcKey, clientIp, fp, operationType, amount, heartPlanId);
+    
+    if (existingPix.exists && existingPix.pix) {
+      console.log("[hoopay-pix] Reutilizando PIX existente:", { order_uuid: existingPix.pix.order_uuid });
+      return jsonResponse({
+        success: true,
+        qr_code_base64: existingPix.pix.qr_code_base64,
+        copy_paste: existingPix.pix.copy_paste,
+        expires_at: existingPix.pix.expires_at,
+        order_uuid: existingPix.pix.order_uuid,
+        status: "pending",
+        reused: true, // indica que é um PIX reutilizado
+      }, 200);
+    }
+  }
 
   const basicAuth = btoa(`${clientId}:${clientSecret}`);
   const donor_name = (body.donor_name as string) ?? "Doador Anônimo";
@@ -437,6 +611,19 @@ serve(async (req) => {
   if (!pix.qrCodeBase64 && !pix.copyPaste) {
     console.error("[hoopay-pix] Hoopay response missing PIX data", { keys: data ? Object.keys(data) : [] });
     return jsonResponse({ error: "Resposta do gateway sem dados PIX. Tente novamente." }, 502);
+  }
+
+  // Salva PIX no cache para reutilização futura
+  if (supUrl && svcKey) {
+    const operationType = isHeartPurchase ? "hearts" : "donation";
+    const orderUuid = (data.orderUUID ?? data.order_uuid) as string;
+    if (orderUuid && pix.expiresAt) {
+      await savePixToCache(
+        supUrl, svcKey, clientIp, fp, operationType, amount, heartPlanId,
+        pix.qrCodeBase64 || "", pix.copyPaste || "", pix.expiresAt, orderUuid
+      );
+      console.log("[hoopay-pix] PIX salvo no cache:", { order_uuid: orderUuid });
+    }
   }
 
   return jsonResponse({
