@@ -208,9 +208,6 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
             <Copy className="w-5 h-5" />
             {copied ? "Copiado!" : "Copiar Código PIX"}
           </button>
-          <button onClick={() => setStep("thankyou")} className="w-full border-2 border-border py-3 rounded-xl font-semibold text-sm hover:bg-muted transition-colors">
-            Já paguei / Ver agradecimento
-          </button>
           <div className="mt-8 space-y-1">
             <p className="font-bold text-foreground text-sm">🎁 Como doar:</p>
             <ol className="text-sm text-foreground space-y-1 list-decimal list-inside">

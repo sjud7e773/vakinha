@@ -4,6 +4,7 @@ import heroImage from "@/assets/hero-image.jpg";
 import { useCampaignStats } from "@/hooks/useCampaignStats";
 import { Progress } from "@/components/ui/progress";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import HeartsPurchase from "./HeartsPurchase";
 
 const TABS = ["Sobre", "Atualizações", "Quem ajudou", "Vakinha Premiada", "Selos recebidos"] as const;
 type TabType = typeof TABS[number];
@@ -33,8 +34,8 @@ interface CampaignPageProps {
 
 const CampaignPage = ({ onDonate }: CampaignPageProps) => {
   const [activeTab, setActiveTab] = useState<TabType>("Sobre");
-  const [liked, setLiked] = useState(false);
   const { totalRaised, heartCount } = useCampaignStats();
+  const [showHeartsPurchase, setShowHeartsPurchase] = useState(false);
   const goal = 15000;
   const progress = goal > 0 ? (totalRaised / goal) * 100 : 0;
 
@@ -54,10 +55,10 @@ const CampaignPage = ({ onDonate }: CampaignPageProps) => {
               decoding="sync"
             />
             <button
-              onClick={() => setLiked(!liked)}
+              onClick={() => setShowHeartsPurchase(true)}
               className="absolute top-4 right-4 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors"
             >
-              <Heart className={`w-5 h-5 ${liked ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+              <Heart className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
 
@@ -199,7 +200,12 @@ const CampaignPage = ({ onDonate }: CampaignPageProps) => {
                   <span className="flex items-center gap-2">
                     Dê o primeiro coração <span>💚</span>
                   </span>
-                  <button className="text-primary font-bold hover:underline">Comprar</button>
+                  <button 
+                    onClick={() => setShowHeartsPurchase(true)}
+                    className="text-primary font-bold hover:underline"
+                  >
+                    Comprar
+                  </button>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span>Apoiadores</span>
@@ -241,6 +247,8 @@ const CampaignPage = ({ onDonate }: CampaignPageProps) => {
           </div>
         </div>
       </div>
+
+      <HeartsPurchase isOpen={showHeartsPurchase} onClose={() => setShowHeartsPurchase(false)} />
     </div>
   );
 };
@@ -273,7 +281,7 @@ const AtualizacoesTab = () => (
   <p className="text-sm text-muted-foreground">Não existem atualizações neste momento.</p>
 );
 
-const QuemAjudouTab = () => (
+const QuemAjudouTab = ({ heartCount }: { heartCount: number }) => (
   <div className="space-y-6">
     <div className="flex items-start gap-4">
       <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
