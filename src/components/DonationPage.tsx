@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { ArrowLeft, Heart, Gift, ShoppingBasket, Copy, Clock, CheckCircle } from "lucide-react";
 import avatar1 from "@/assets/avatar-1.jpg";
 import avatar2 from "@/assets/avatar-2.jpg";
@@ -7,13 +7,9 @@ import avatar4 from "@/assets/avatar-4.jpg";
 import avatar5 from "@/assets/avatar-5.jpg";
 import seloSeguranca from "@/assets/selo-seguranca.png";
 import logo from "@/assets/logo.png";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import {
-  shouldShowSimplifiedDonationPage,
-  getBrowserFingerprint,
-  solveProofOfWork,
-} from "@/lib/donation-security";
+import { shouldShowSimplifiedDonationPage } from "@/lib/donation-security";
+import { createChargePix } from "@/lib/hoopay-direct";
 
 const PRESET_VALUES = [20, 30, 50, 75, 100, 200, 500, 750, 1000];
 
@@ -37,36 +33,12 @@ interface DonationPageProps {
 
 const HONEYPOT_FIELD_NAME = "website";
 const MAX_AMOUNT = 100_000;
-const PIX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000;
-
-function getSupabaseConfig(): { url: string; key: string; valid: boolean } {
-  const url = import.meta.env.VITE_SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  return {
-    url: typeof url === "string" ? url.trim() : "",
-    key: typeof key === "string" ? key.trim() : "",
-    valid: !!(url && key),
-  };
-}
 
 function validateAmount(amount: number): { valid: boolean; error?: string } {
   if (typeof amount !== "number" || Number.isNaN(amount)) return { valid: false, error: "Valor inválido." };
   if (amount < 1) return { valid: false, error: "Valor mínimo é R$ 1,00" };
   if (amount > MAX_AMOUNT) return { valid: false, error: "Valor máximo excedido." };
   return { valid: true };
-}
-
-function extractErrorMessage(error: unknown, data: unknown, fallback: string): string {
-  if (data && typeof data === "object" && "error" in data && typeof (data as { error?: string }).error === "string") {
-    return (data as { error: string }).error;
-  }
-  if (error && typeof error === "object") {
-    const e = error as { message?: string; context?: { body?: { error?: string } } };
-    if (e.context?.body?.error) return e.context.body.error;
-    if (e.message) return e.message;
-  }
-  return fallback;
 }
 
 const DonationPage = ({ onBack }: DonationPageProps) => {
@@ -83,24 +55,6 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
 
   const simplifiedMode = useMemo(() => shouldShowSimplifiedDonationPage(), []);
   const totalAmount = amount + (selectedTurbine !== null ? TURBINE_OPTIONS[selectedTurbine].price : 0);
-
-  const invokeWithRetry = useCallback(
-    async (body: Record<string, unknown>): Promise<{ data: unknown; error: unknown }> => {
-      let lastData: unknown = null;
-      let lastError: unknown = null;
-      for (let attempt = 1; attempt <= PIX_RETRIES; attempt++) {
-        const { data, error } = await supabase.functions.invoke("hoopay-pix", { body });
-        if (!error && data != null) return { data, error: null };
-        lastData = data;
-        lastError = error;
-        if (attempt < PIX_RETRIES) {
-          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
-        }
-      }
-      return { data: lastData, error: lastError };
-    },
-    []
-  );
 
   const handleSelectPreset = (val: number) => {
     setAmount(val);
@@ -141,59 +95,18 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
         return;
       }
 
-      const config = getSupabaseConfig();
-      if (!config.valid) {
-        const msg = "Configuração incompleta. Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY nas variáveis de ambiente da Vercel e faça um novo deploy.";
-        toast({ title: "Erro de configuração", description: msg, variant: "destructive" });
-        if (import.meta.env.DEV) console.error("[DonationPage] Missing env:", { url: !!config.url, key: !!config.key });
-        return;
-      }
+      const result = await createChargePix(finalAmount);
 
-      const { data: tokenData, error: tokenError } = await invokeWithRetry({ action: "page_token" });
-      if (tokenError || !tokenData || typeof (tokenData as { token?: string }).token !== "string") {
-        const msg = extractErrorMessage(tokenError, tokenData, "Não foi possível iniciar a sessão. Verifique as variáveis de ambiente na Vercel (VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY) e tente novamente.");
-        throw new Error(msg);
-      }
-      const pageToken = (tokenData as { token: string }).token;
-
-      const { data: challengeData, error: challengeError } = await invokeWithRetry({ action: "challenge" });
-      if (challengeError) {
-        throw new Error(extractErrorMessage(challengeError, challengeData, "Não foi possível obter o desafio de segurança."));
-      }
-      const ch = challengeData as { nonce?: string; difficulty?: number } | undefined;
-      const nonce = ch?.nonce;
-      const difficulty = ch?.difficulty ?? 2;
-      if (!nonce) throw new Error("Não foi possível obter o desafio de segurança.");
-
-      const powSolution = await solveProofOfWork(nonce, difficulty);
-      const fingerprint = await getBrowserFingerprint();
-
-      const pixBody = {
-        amount: finalAmount,
-        pow_nonce: nonce,
-        pow_solution: powSolution,
-        fingerprint,
-        page_token: pageToken,
-        [HONEYPOT_FIELD_NAME]: honeypot,
-      };
-
-      const { data, error } = await invokeWithRetry(pixBody);
-
-      if (error) throw new Error(extractErrorMessage(error, data, "Erro ao gerar PIX."));
-
-      const res = data as { success?: boolean; error?: string; qr_code_base64?: string; copy_paste?: string; expires_at?: string } | null;
-      const hasPix = res?.success && (res?.qr_code_base64 || res?.copy_paste);
-
-      if (hasPix) {
+      if (result.success && (result.qr_code_base64 || result.copy_paste)) {
         setPixData({
-          qr_code_base64: res?.qr_code_base64 ?? null,
-          copy_paste: res?.copy_paste ?? null,
-          expires_at: res?.expires_at ?? null,
+          qr_code_base64: result.qr_code_base64 ?? null,
+          copy_paste: result.copy_paste ?? null,
+          expires_at: result.expires_at ?? null,
         });
         setStep("pix");
         startCountdown();
       } else {
-        throw new Error(res?.error ?? "Não foi possível gerar o PIX. Tente novamente.");
+        throw new Error(result.error ?? "Não foi possível gerar o PIX. Tente novamente.");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Tente novamente.";
