@@ -337,8 +337,8 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
         <p className="text-xs text-center text-muted-foreground mb-6">
           Ao clicar no botão acima você declara que é maior de 18 anos e está de acordo com os <span className="text-primary font-semibold cursor-pointer">Termos</span>.
         </p>
-        <div className="border border-border rounded-xl p-5 flex items-center gap-3 mb-5">
-          <img src={seloSeguranca} alt="Selo" className="h-10 flex-shrink-0" loading="eager" decoding="sync" />
+        <div className="border border-border rounded-xl p-5 flex items-center justify-center gap-3 mb-5">
+          <img src={seloSeguranca} alt="Selo de Segurança" className="h-10 flex-shrink-0" loading="eager" decoding="sync" />
         </div>
         <p className="text-xs text-center text-muted-foreground pb-8">Informamos que o preenchimento estará disponível após a conclusão desta doação.</p>
       </div>

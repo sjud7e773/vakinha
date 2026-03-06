@@ -47,15 +47,16 @@ export interface PixChargeOptions {
 
 export async function createChargePix(amount: number, options?: PixChargeOptions): Promise<PixChargeResult> {
   const auth = _resolveAuth();
+  // NOTA: isHeartPurchase é usado apenas para lógica interna/Edge Function
+  // Não enviar para API Hoopay diretamente para evitar erro de campo não reconhecido
   const body = {
     amount,
-    is_heart_purchase: options?.isHeartPurchase ?? false,
     customer: {
       email: "doador@vakinha.com",
       name: "Doador Anônimo",
       phone: "11912345678",
     },
-    products: [{ title: "Doação", amount, quantity: 1 }],
+    products: [{ title: options?.isHeartPurchase ? "Corações" : "Doação", amount, quantity: 1 }],
     payments: [{ amount, type: "pix" }],
     data: {
       ip: "0.0.0.0",
