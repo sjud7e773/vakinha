@@ -70,8 +70,9 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
   };
 
   const handleContribute = () => {
-    if (amount < MIN_AMOUNT) {
-      toast({ title: `Valor mínimo é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}`, variant: "destructive" });
+    // Valida o VALOR TOTAL (doação + turbina), não apenas o valor base
+    if (totalAmount < MIN_AMOUNT) {
+      toast({ title: `Valor mínimo total é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}`, variant: "destructive" });
       return;
     }
     if (selectedTurbine === null) setStep("turbine");
@@ -318,7 +319,7 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
         {simplifiedMode ? (
           <div className="w-full bg-muted text-muted-foreground py-4 rounded-xl font-medium text-center mb-5">Para doar, acesse por um navegador comum.</div>
         ) : (
-          <button onClick={handleContribute} disabled={loading || amount < MIN_AMOUNT} className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-extrabold disabled:opacity-50 hover:opacity-90 transition-opacity mb-5">
+          <button onClick={handleContribute} disabled={loading || totalAmount < MIN_AMOUNT} className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-extrabold disabled:opacity-50 hover:opacity-90 transition-opacity mb-5">
             {loading ? "PROCESSANDO..." : "CONTRIBUIR"}
           </button>
         )}
@@ -331,7 +332,7 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
           <span className="text-sm text-muted-foreground ml-2">+1.542 apoiadores</span>
         </div>
         <div className="flex items-center justify-center gap-2 mb-3">
-          <span className="text-xs text-muted-foreground">Valor mínimo: R$ 10,00</span>
+          <span className="text-xs text-muted-foreground">Valor mínimo total: R$ 10,00 (doação + turbina)</span>
         </div>
         <p className="text-xs text-center text-muted-foreground mb-6">
           Ao clicar no botão acima você declara que é maior de 18 anos e está de acordo com os <span className="text-primary font-semibold cursor-pointer">Termos</span>.

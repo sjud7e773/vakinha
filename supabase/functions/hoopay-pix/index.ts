@@ -395,8 +395,14 @@ serve(async (req) => {
   if (amount == null || typeof amount !== "number" || Number.isNaN(amount)) {
     return jsonResponse({ error: "Valor da doação inválido." }, 400);
   }
-  const MIN_AMOUNT = 10;
-  if (amount < MIN_AMOUNT) return jsonResponse({ error: `Valor mínimo é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}` }, 400);
+  
+  // Corações não têm valor mínimo de R$10 - usam preço exato do plano
+  const isHeartPurchase = body.is_heart_purchase === true;
+  const MIN_AMOUNT = isHeartPurchase ? 0.01 : 10;
+  
+  if (!isHeartPurchase && amount < MIN_AMOUNT) {
+    return jsonResponse({ error: `Valor mínimo é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}` }, 400);
+  }
   if (amount > 100000) return jsonResponse({ error: "Valor máximo de doação excedido." }, 400);
 
   const basicAuth = btoa(`${clientId}:${clientSecret}`);

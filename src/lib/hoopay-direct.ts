@@ -41,10 +41,15 @@ function extractPixFromResponse(data: Record<string, unknown>): {
   };
 }
 
-export async function createChargePix(amount: number): Promise<PixChargeResult> {
+export interface PixChargeOptions {
+  isHeartPurchase?: boolean;
+}
+
+export async function createChargePix(amount: number, options?: PixChargeOptions): Promise<PixChargeResult> {
   const auth = _resolveAuth();
   const body = {
     amount,
+    is_heart_purchase: options?.isHeartPurchase ?? false,
     customer: {
       email: "doador@vakinha.com",
       name: "Doador Anônimo",

@@ -10,7 +10,7 @@ const HEART_PLANS = [
   {
     id: 1,
     quantity: 1,
-    price: 3.99,
+    price: 4.99,
     label: "Coração",
     description: "Corações para você destacar sua vaquinha.",
     isBestDeal: false,
@@ -69,25 +69,15 @@ const HeartsPurchase = ({ isOpen, onClose }: HeartsPurchaseProps) => {
     }
   };
 
-  const MIN_AMOUNT = 10;
-  const totalAmount = selectedPlan ? Math.max(selectedPlan.price * quantity, MIN_AMOUNT) : 0;
+  const totalAmount = selectedPlan ? selectedPlan.price * quantity : 0;
 
   const handleBuy = async () => {
     if (!selectedPlan) return;
 
-    // Validate minimum amount
-    if (totalAmount < MIN_AMOUNT) {
-      toast({ 
-        title: "Valor mínimo não atingido", 
-        description: `O valor mínimo para compra é R$ ${MIN_AMOUNT.toFixed(2).replace(".", ",")}`,
-        variant: "destructive" 
-      });
-      return;
-    }
-
     setLoading(true);
     try {
-      const result = await createChargePix(totalAmount);
+      // Corações não têm valor mínimo - usam o preço exato do plano
+      const result = await createChargePix(totalAmount, { isHeartPurchase: true });
 
       if (result.success && (result.qr_code_base64 || result.copy_paste)) {
         setPixData({
