@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Heart, Share2, Check, ChevronDown, ChevronUp, MapPin, Star, Zap, Award, Trophy } from "lucide-react";
 import heroImage from "@/assets/hero-image.jpg";
+import { useCampaignStats } from "@/hooks/useCampaignStats";
 import { Progress } from "@/components/ui/progress";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
@@ -33,10 +34,9 @@ interface CampaignPageProps {
 const CampaignPage = ({ onDonate }: CampaignPageProps) => {
   const [activeTab, setActiveTab] = useState<TabType>("Sobre");
   const [liked, setLiked] = useState(false);
-
-  const raised = 1498;
+  const { totalRaised, heartCount } = useCampaignStats();
   const goal = 15000;
-  const progress = (raised / goal) * 100;
+  const progress = goal > 0 ? (totalRaised / goal) * 100 : 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -147,7 +147,7 @@ const CampaignPage = ({ onDonate }: CampaignPageProps) => {
           <div id="tab-content" className="mb-8">
             {activeTab === "Sobre" && <SobreTab />}
             {activeTab === "Atualizações" && <AtualizacoesTab />}
-            {activeTab === "Quem ajudou" && <QuemAjudouTab />}
+            {activeTab === "Quem ajudou" && <QuemAjudouTab heartCount={heartCount} />}
             {activeTab === "Vakinha Premiada" && <VakinhaPremiadaTab />}
             {activeTab === "Selos recebidos" && <SelosRecebidosTab />}
           </div>
@@ -188,7 +188,7 @@ const CampaignPage = ({ onDonate }: CampaignPageProps) => {
               <Progress value={progress} className="h-2 mb-5" />
               <p className="text-sm text-muted-foreground font-semibold">Arrecadado</p>
               <p className="text-4xl font-extrabold text-primary mt-1">
-                R$ {raised.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                R$ {totalRaised.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
               <p className="text-base text-muted-foreground mt-1">
                 de R$ {goal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -310,7 +310,7 @@ const QuemAjudouTab = () => (
       </div>
       <div>
         <p className="font-bold text-foreground">Corações</p>
-        <p className="text-sm text-muted-foreground">Esta vaquinha recebeu 12 corações no total</p>
+        <p className="text-sm text-muted-foreground">Esta vaquinha recebeu {heartCount} corações no total</p>
       </div>
     </div>
 

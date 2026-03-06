@@ -12,7 +12,11 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      campaign_stats: {
+        Row: { id: number; total_raised: number; heart_count: number; updated_at: string }
+        Insert: { id?: number; total_raised?: number; heart_count?: number; updated_at?: string }
+        Update: { id?: number; total_raised?: number; heart_count?: number; updated_at?: string }
+      }
     }
     Views: {
       [_ in never]: never

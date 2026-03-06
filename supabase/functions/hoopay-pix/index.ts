@@ -7,41 +7,18 @@ const corsHeaders = {
 };
 
 const HOOPAY_API = "https://api.pay.hoopay.com.br";
+const HOOPAY_FETCH_TIMEOUT_MS = 25_000;
+const HOOPAY_RETRY_ATTEMPTS = 2;
 
-/** User-Agent de bots/crawlers. NÃO bloqueamos por Referer para não afetar quem clicou no anúncio (UA normal). */
 const BOT_UA_PATTERNS = [
-  "facebookexternalhit",
-  "facebot",
-  "googlebot",
-  "bingbot",
-  "crawler",
-  "spider",
-  "scraper",
-  "slurp",
-  "duckduckbot",
-  "headless",
-  "phantom",
-  "selenium",
-  "puppeteer",
-  "playwright",
-  "curl",
-  "wget",
-  "python-requests",
-  "go-http-client",
-  "java/",
-  "bot",
+  "facebookexternalhit", "facebot", "googlebot", "bingbot", "crawler", "spider",
+  "scraper", "slurp", "duckduckbot", "headless", "phantom", "selenium",
+  "puppeteer", "playwright", "curl", "wget", "python-requests", "go-http-client",
+  "java/", "bot",
 ];
 
-type RateLimitWindow = {
-  count: number;
-  resetAt: number;
-  lastRequestAt?: number;
-};
-
-type RateLimitState = {
-  short: RateLimitWindow;
-  long: RateLimitWindow;
-};
+type RateLimitWindow = { count: number; resetAt: number; lastRequestAt?: number };
+type RateLimitState = { short: RateLimitWindow; long: RateLimitWindow };
 
 const SHORT_WINDOW_MS = 60_000;
 const LONG_WINDOW_MS = 10 * 60_000;
@@ -79,57 +56,31 @@ function consumePageToken(token: string): boolean {
   return typeof expiresAt === "number" && expiresAt > now;
 }
 
-function evaluateRateLimit(identifier: string): { limited: boolean; reason?: string } {
+function evaluateRateLimit(id: string): { limited: boolean; reason?: string } {
   const now = Date.now();
-  const existing = rateLimitStore.get(identifier);
-
+  const existing = rateLimitStore.get(id);
   const shortResetAt = now + SHORT_WINDOW_MS;
   const longResetAt = now + LONG_WINDOW_MS;
-
   const state: RateLimitState = existing
     ? {
-        short:
-          existing.short.resetAt <= now
-            ? { count: 0, resetAt: shortResetAt }
-            : { ...existing.short, lastRequestAt: existing.short.lastRequestAt },
-        long:
-          existing.long.resetAt <= now
-            ? { count: 0, resetAt: longResetAt }
-            : { ...existing.long, lastRequestAt: existing.long.lastRequestAt },
+        short: existing.short.resetAt <= now ? { count: 0, resetAt: shortResetAt } : { ...existing.short },
+        long: existing.long.resetAt <= now ? { count: 0, resetAt: longResetAt } : { ...existing.long },
       }
-    : {
-        short: { count: 0, resetAt: shortResetAt },
-        long: { count: 0, resetAt: longResetAt },
-      };
-
-  const lastShort = state.short.lastRequestAt ?? 0;
-  const burst = now - lastShort < BURST_WINDOW_MS;
+    : { short: { count: 0, resetAt: shortResetAt }, long: { count: 0, resetAt: longResetAt } };
+  const burst = existing && (now - (existing.short.lastRequestAt ?? 0)) < BURST_WINDOW_MS;
   const nextShort = state.short.count + 1;
   const nextLong = state.long.count + 1;
-
-  if (burst && nextShort > BURST_MAX) {
-    return { limited: true, reason: "burst" };
-  }
-
-  if (nextShort > SHORT_WINDOW_MAX) {
-    return { limited: true, reason: "short" };
-  }
-
-  if (nextLong > LONG_WINDOW_MAX) {
-    return { limited: true, reason: "long" };
-  }
-
+  if (burst && nextShort > BURST_MAX) return { limited: true, reason: "burst" };
+  if (nextShort > SHORT_WINDOW_MAX) return { limited: true, reason: "short" };
+  if (nextLong > LONG_WINDOW_MAX) return { limited: true, reason: "long" };
   state.short.count = nextShort;
   state.short.lastRequestAt = now;
   state.long.count = nextLong;
   state.long.lastRequestAt = now;
-
-  rateLimitStore.set(identifier, state);
-
+  rateLimitStore.set(id, state);
   return { limited: false };
 }
 
-/** Apenas User-Agent. Referer NÃO é usado para não bloquear usuários legítimos do Facebook Ads. */
 function isBotOrCrawlerRequest(req: Request): boolean {
   const ua = (req.headers.get("user-agent") ?? "").toLowerCase();
   return BOT_UA_PATTERNS.some((p) => ua.includes(p));
@@ -147,21 +98,12 @@ function randomPageToken(): string {
   return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Valida solução PoW: SHA256(nonce + ":" + solution) deve começar com `difficulty` zeros. */
-async function verifyProofOfWork(
-  nonce: string,
-  solution: string,
-  difficulty: number
-): Promise<boolean> {
-  if (!nonce || !solution || difficulty < 0) return false;
-  const message = `${nonce}:${solution}`;
-  const data = new TextEncoder().encode(message);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  const hex = Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  const prefix = "0".repeat(difficulty);
-  return hex.startsWith(prefix);
+async function verifyProofOfWork(nonce: string, solution: string, diff: number): Promise<boolean> {
+  if (!nonce || !solution || diff < 0) return false;
+  const msg = `${nonce}:${solution}`;
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(msg));
+  const hex = Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hex.startsWith("0".repeat(diff));
 }
 
 function jsonResponse(data: object, status: number, headers?: Record<string, string>) {
@@ -171,225 +113,234 @@ function jsonResponse(data: object, status: number, headers?: Record<string, str
   });
 }
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+function isWebhookRequest(req: Request): boolean {
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    const isClientInvocation = authHeader.startsWith("Bearer ");
+    return new URL(req.url).searchParams.get("source") === "hoopay-webhook";
+  } catch {
+    return false;
+  }
+}
 
-    if (!isClientInvocation) {
-      return jsonResponse({ success: true, received: true }, 200);
-    }
+function extractPixFromHoopayResponse(data: Record<string, unknown>): {
+  qrCodeBase64: string | null;
+  copyPaste: string | null;
+  expiresAt: string | null;
+} {
+  const charges: unknown[] = (data.payment as Record<string, unknown>)?.charges ?? (data.charges as unknown[]) ?? [];
+  if (!Array.isArray(charges)) return { qrCodeBase64: null, copyPaste: null, expiresAt: null };
+  const pix = charges.find(
+    (c: unknown) => (c as Record<string, unknown>)?.type === "PIX" || (c as Record<string, unknown>)?.type === "pix"
+  ) as Record<string, unknown> | undefined;
+  if (!pix) return { qrCodeBase64: null, copyPaste: null, expiresAt: null };
+  const qr = (pix.pixQrCode ?? pix.pix_qr_code ?? pix.qrCodeBase64) as string | undefined;
+  const cp = (pix.pixPayload ?? pix.pix_payload ?? pix.copyPaste) as string | undefined;
+  const ex = (pix.expireAt ?? pix.expire_at ?? pix.expiresAt) as string | undefined;
+  return {
+    qrCodeBase64: typeof qr === "string" ? qr : null,
+    copyPaste: typeof cp === "string" ? cp : null,
+    expiresAt: typeof ex === "string" ? ex : null,
+  };
+}
 
-    let body: Record<string, unknown> = {};
+async function hoopayCharge(
+  basicAuth: string,
+  chargeBody: Record<string, unknown>
+): Promise<{ ok: boolean; status: number; data?: Record<string, unknown>; rawText?: string }> {
+  let lastErr: Error | null = null;
+  let lastStatus = 0;
+  let lastText = "";
+  for (let attempt = 1; attempt <= HOOPAY_RETRY_ATTEMPTS; attempt++) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), HOOPAY_FETCH_TIMEOUT_MS);
     try {
-      body = (await req.json()) as Record<string, unknown>;
-    } catch {
-      return jsonResponse({ error: "Corpo da requisição inválido." }, 400);
+      const res = await fetch(`${HOOPAY_API}/charge`, {
+        method: "POST",
+        headers: { Authorization: `Basic ${basicAuth}`, "Content-Type": "application/json" },
+        body: JSON.stringify(chargeBody),
+        signal: ctrl.signal,
+      });
+      clearTimeout(tid);
+      const text = await res.text();
+      if (!res.ok) {
+        lastStatus = res.status;
+        lastText = text;
+        if (attempt < HOOPAY_RETRY_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 800 * attempt));
+          continue;
+        }
+        return { ok: false, status: res.status, rawText: text };
+      }
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        console.error("[hoopay-pix] Invalid JSON:", text?.slice(0, 200));
+        return { ok: false, status: res.status, rawText: text };
+      }
+      return { ok: true, status: res.status, data: parsed };
+    } catch (e) {
+      clearTimeout(tid);
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      console.error(`[hoopay-pix] Attempt ${attempt}/${HOOPAY_RETRY_ATTEMPTS} failed:`, lastErr.message);
+      if (attempt < HOOPAY_RETRY_ATTEMPTS) await new Promise((r) => setTimeout(r, 800 * attempt));
     }
+  }
+  return { ok: false, status: lastStatus || 502, rawText: lastText || (lastErr?.message ?? "Unknown") };
+}
 
-    if (body.action === "challenge") {
-      return jsonResponse(
-        {
-          nonce: randomNonce(),
-          difficulty: POW_DIFFICULTY,
-        },
-        200
-      );
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const isWebhook = isWebhookRequest(req);
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const hasBearer = authHeader.startsWith("Bearer ");
+
+  if (isWebhook) {
+    try {
+      let body: Record<string, unknown> = {};
+      try {
+        const t = await req.text();
+        if (t) body = (JSON.parse(t) as Record<string, unknown>) ?? {};
+      } catch {
+        console.warn("[hoopay-pix] Webhook body parse failed");
+      }
+      const status = (body.status as string) ?? (body.payment as Record<string, unknown>)?.status;
+      const payment = body.payment as Record<string, unknown> | undefined;
+      const amt = Number(body.amount ?? payment?.amount ?? 0);
+      const isPaid = ["PAID", "paid", "CONFIRMED", "confirmed"].includes(String(status));
+      if (isPaid && amt > 0) {
+        const supUrl = Deno.env.get("SUPABASE_URL");
+        const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        if (supUrl && svcKey) {
+          const r = await fetch(`${supUrl}/rest/v1/rpc/increment_donation_total`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: svcKey, Authorization: `Bearer ${svcKey}` },
+            body: JSON.stringify({ amount_reais: amt }),
+          });
+          if (!r.ok) console.warn("[hoopay-pix] Webhook increment failed", await r.text());
+        }
+      }
+      return jsonResponse({ received: true }, 200);
+    } catch (e) {
+      console.error("[hoopay-pix] Webhook error:", e);
+      return jsonResponse({ received: false }, 500);
     }
+  }
 
-    /** Token efêmero para vincular sessão e dificultar uso da API fora da página. */
-    if (body.action === "page_token") {
-      const token = randomPageToken();
-      pageTokens.set(token, Date.now() + PAGE_TOKEN_TTL_MS);
-      return jsonResponse(
-        { token, expires_at: Date.now() + PAGE_TOKEN_TTL_MS },
-        200
-      );
-    }
-
-    // --- Geração de PIX: validações de segurança ---
-    const ipHeader = req.headers.get("x-forwarded-for") ?? "";
-    const clientIp = ipHeader.split(",")[0].trim() || "unknown";
-    const fingerprint =
-      (body.fingerprint as string) || req.headers.get("x-fingerprint") || "na";
-    const rateLimitKey = `pix:${clientIp}:${fingerprint}`;
-
-    // Honeypot: campo invisível preenchido = bot → bloqueio silencioso (retorna success sem PIX real)
-    const honeypot = (body.website as string) ?? "";
-    if (typeof honeypot === "string" && honeypot.trim() !== "") {
-      return jsonResponse(
-        {
-          success: true,
-          qr_code_base64: null,
-          copy_paste: null,
-          expires_at: null,
-        },
-        200
-      );
-    }
-
-    if (isBotOrCrawlerRequest(req)) {
-      return jsonResponse({ success: false }, 200);
-    }
-
-    const pageToken = (body.page_token as string) ?? "";
-    if (!pageToken || !consumePageToken(pageToken)) {
-      return jsonResponse(
-        { error: "Sessão expirada. Atualize a página e tente novamente." },
-        400
-      );
-    }
-
-    const rateLimitResult = evaluateRateLimit(rateLimitKey);
-    if (rateLimitResult.limited) {
-      return jsonResponse(
-        {
-          error:
-            "Limite de geração de PIX atingido. Aguarde alguns minutos antes de tentar novamente.",
-        },
-        429
-      );
-    }
-
-    // Validação Proof-of-Work (nonce de uso único para evitar replay)
-    const powNonce = body.pow_nonce as string | undefined;
-    const powSolution = body.pow_solution as string | undefined;
-    if (!powNonce || !powSolution) {
-      return jsonResponse(
-        { error: "Desafio de segurança inválido. Atualize a página e tente novamente." },
-        400
-      );
-    }
-    if (isNonceUsed(powNonce)) {
-      return jsonResponse(
-        { error: "Desafio já utilizado. Atualize a página e tente novamente." },
-        400
-      );
-    }
-    if (!(await verifyProofOfWork(powNonce, powSolution, POW_DIFFICULTY))) {
-      return jsonResponse(
-        { error: "Desafio de segurança inválido. Atualize a página e tente novamente." },
-        400
-      );
-    }
-    markNonceUsed(powNonce);
-
-    const clientId = Deno.env.get("HOOPAY_CLIENT_ID");
-    const clientSecret = Deno.env.get("HOOPAY_CLIENT_SECRET");
-
-    if (!clientId || !clientSecret) {
-      console.error("Hoopay credentials not configured");
-      return jsonResponse({ error: "Erro ao configurar o meio de pagamento." }, 500);
-    }
-
-    const {
-      amount,
-      donor_name,
-      donor_email,
-      donor_phone,
-      donor_document,
-    } = body as {
-      amount?: number;
-      donor_name?: string;
-      donor_email?: string;
-      donor_phone?: string;
-      donor_document?: string;
-    };
-
-    if (!amount || typeof amount !== "number" || Number.isNaN(amount)) {
-      return jsonResponse({ error: "Valor da doação inválido." }, 400);
-    }
-
-    if (amount < 1) {
-      return jsonResponse({ error: "Valor mínimo é R$ 1,00" }, 400);
-    }
-
-    if (amount > 100000) {
-      return jsonResponse({ error: "Valor máximo de doação excedido." }, 400);
-    }
-
-    const basicAuth = btoa(`${clientId}:${clientSecret}`);
-
-    const customerObj: Record<string, string> = {
-      email: donor_email || "doador@vakinha.com",
-      name: donor_name || "Doador Anônimo",
-      phone: donor_phone || "11912345678",
-    };
-
-    if (donor_document) {
-      customerObj.document = donor_document;
-    }
-
-    const chargeBody = {
-      amount,
-      customer: customerObj,
-      products: [
-        {
-          title: "Doação",
-          amount,
-          quantity: 1,
-        },
-      ],
-      payments: [
-        {
-          amount,
-          type: "pix",
-        },
-      ],
-      data: {
-        ip: clientIp,
-        callbackURL:
-          "https://yxedewebfzpivfcfabes.supabase.co/functions/v1/hoopay-pix?source=hoopay-webhook",
-      },
-    };
-
-    const res = await fetch(`${HOOPAY_API}/charge`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${basicAuth}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(chargeBody),
-    });
-
-    const responseText = await res.text();
-
-    if (!res.ok) {
-      console.error("Hoopay charge failed", { status: res.status });
-      return jsonResponse(
-        { error: "Falha ao criar cobrança PIX. Tente novamente em instantes." },
-        502
-      );
-    }
-
-    const data = JSON.parse(responseText);
-    const pixCharge = data.payment?.charges?.find(
-      (c: { type?: string }) => c.type === "PIX"
-    );
-
+  if (!hasBearer) {
+    console.warn("[hoopay-pix] Missing Authorization Bearer");
     return jsonResponse(
-      {
-        success: true,
-        qr_code_base64: pixCharge?.pixQrCode || null,
-        copy_paste: pixCharge?.pixPayload || null,
-        expires_at: pixCharge?.expireAt || null,
-        order_uuid: data.orderUUID || null,
-        status: data.payment?.status || null,
-      },
-      200
-    );
-  } catch (error: unknown) {
-    console.error("Hoopay PIX error:", error);
-    return jsonResponse(
-      {
-        error:
-          "Erro interno ao gerar PIX. Tente novamente em alguns instantes.",
-      },
-      500
+      { error: "Não autorizado. Verifique se as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY estão configuradas na Vercel. Atualize a página e tente novamente." },
+      401
     );
   }
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return jsonResponse({ error: "Corpo da requisição inválido." }, 400);
+  }
+
+  if (body.action === "challenge") {
+    return jsonResponse({ nonce: randomNonce(), difficulty: POW_DIFFICULTY }, 200);
+  }
+
+  if (body.action === "page_token") {
+    const token = randomPageToken();
+    pageTokens.set(token, Date.now() + PAGE_TOKEN_TTL_MS);
+    return jsonResponse({ token, expires_at: Date.now() + PAGE_TOKEN_TTL_MS }, 200);
+  }
+
+  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+  const clientIp = ipHeader.split(",")[0].trim() || "unknown";
+  const fp = (body.fingerprint as string) ?? req.headers.get("x-fingerprint") ?? "na";
+  const rlKey = `pix:${clientIp}:${fp}`;
+
+  const honeypot = (body.website as string) ?? "";
+  if (typeof honeypot === "string" && honeypot.trim() !== "") {
+    return jsonResponse({ success: true, qr_code_base64: null, copy_paste: null, expires_at: null }, 200);
+  }
+
+  if (isBotOrCrawlerRequest(req)) return jsonResponse({ success: false }, 200);
+
+  const pageToken = (body.page_token as string) ?? "";
+  if (!pageToken || !consumePageToken(pageToken)) {
+    return jsonResponse({ error: "Sessão expirada. Atualize a página e tente novamente." }, 400);
+  }
+
+  const rl = evaluateRateLimit(rlKey);
+  if (rl.limited) {
+    return jsonResponse({ error: "Limite de geração de PIX atingido. Aguarde alguns minutos." }, 429);
+  }
+
+  const powNonce = body.pow_nonce as string | undefined;
+  const powSol = body.pow_solution as string | undefined;
+  if (!powNonce || !powSol) {
+    return jsonResponse({ error: "Desafio de segurança inválido. Atualize a página e tente novamente." }, 400);
+  }
+  if (isNonceUsed(powNonce)) {
+    return jsonResponse({ error: "Desafio já utilizado. Atualize a página e tente novamente." }, 400);
+  }
+  if (!(await verifyProofOfWork(powNonce, powSol, POW_DIFFICULTY))) {
+    return jsonResponse({ error: "Desafio de segurança inválido. Atualize a página e tente novamente." }, 400);
+  }
+  markNonceUsed(powNonce);
+
+  const clientId = Deno.env.get("HOOPAY_CLIENT_ID");
+  const clientSecret = Deno.env.get("HOOPAY_CLIENT_SECRET");
+  if (!clientId || !clientSecret) {
+    console.error("[hoopay-pix] HOOPAY_CLIENT_ID or HOOPAY_CLIENT_SECRET not set");
+    return jsonResponse({ error: "Erro ao configurar o meio de pagamento." }, 500);
+  }
+
+  const amount = body.amount as number | undefined;
+  if (amount == null || typeof amount !== "number" || Number.isNaN(amount)) {
+    return jsonResponse({ error: "Valor da doação inválido." }, 400);
+  }
+  if (amount < 1) return jsonResponse({ error: "Valor mínimo é R$ 1,00" }, 400);
+  if (amount > 100000) return jsonResponse({ error: "Valor máximo de doação excedido." }, 400);
+
+  const basicAuth = btoa(`${clientId}:${clientSecret}`);
+  const donor_name = (body.donor_name as string) ?? "Doador Anônimo";
+  const donor_email = (body.donor_email as string) ?? "doador@vakinha.com";
+  const donor_phone = (body.donor_phone as string) ?? "11912345678";
+  const donor_doc = body.donor_document as string | undefined;
+
+  const customer: Record<string, string> = { email: donor_email, name: donor_name, phone: donor_phone };
+  if (donor_doc) customer.document = donor_doc;
+
+  const chargeBody = {
+    amount,
+    customer,
+    products: [{ title: "Doação", amount, quantity: 1 }],
+    payments: [{ amount, type: "pix" }],
+    data: {
+      ip: clientIp,
+      callbackURL: "https://yxedewebfzpivfcfabes.supabase.co/functions/v1/hoopay-pix?source=hoopay-webhook",
+    },
+  };
+
+  const result = await hoopayCharge(basicAuth, chargeBody);
+
+  if (!result.ok) {
+    console.error("[hoopay-pix] Hoopay API error", { status: result.status, sample: String(result.rawText).slice(0, 150) });
+    return jsonResponse({ error: "Falha ao criar cobrança PIX. Tente novamente em instantes." }, 502);
+  }
+
+  const data = result.data as Record<string, unknown>;
+  const pix = extractPixFromHoopayResponse(data);
+  if (!pix.qrCodeBase64 && !pix.copyPaste) {
+    console.error("[hoopay-pix] Hoopay response missing PIX data", { keys: data ? Object.keys(data) : [] });
+    return jsonResponse({ error: "Resposta do gateway sem dados PIX. Tente novamente." }, 502);
+  }
+
+  return jsonResponse({
+    success: true,
+    qr_code_base64: pix.qrCodeBase64,
+    copy_paste: pix.copyPaste,
+    expires_at: pix.expiresAt,
+    order_uuid: (data.orderUUID ?? data.order_uuid) ?? null,
+    status: (data.payment as Record<string, unknown>)?.status ?? null,
+  }, 200);
 });
