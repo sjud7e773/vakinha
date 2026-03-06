@@ -471,20 +471,13 @@ const HeartsPurchase = ({ isOpen, onClose }: HeartsPurchaseProps) => {
 
             <button
               onClick={handleCopyPix}
-              className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity mb-3"
+              className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
             >
               <Copy className="w-5 h-5" />
               {copied ? "Copiado!" : "Copiar Código PIX"}
             </button>
 
-            <button
-              onClick={handlePaymentConfirmed}
-              className="w-full border-2 border-gray-200 py-3 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-colors"
-            >
-              Já paguei
-            </button>
-
-            <div className="mt-8 space-y-1">
+            <div className="mt-6 space-y-1">
               <p className="font-bold text-gray-900 text-sm">🎁 Como doar:</p>
               <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
                 <li>Toque em Copiar Código PIX</li>

@@ -173,6 +173,51 @@ const ABUSE_PIX_LIMIT = 5; // máximo de PIX em 5 minutos
 const ABUSE_WINDOW_MS = 5 * 60 * 1000; // 5 minutos
 const ABUSE_BLOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutos de bloqueio
 
+// Rate limiting em memória (BACKUP caso Supabase falhe)
+const abuseMemory = new Map<string, { count: number; firstAttempt: number; blockedUntil?: number }>();
+
+function checkAbuseMemory(key: string): { isBlocked: boolean; blockedUntil?: number } {
+  const now = Date.now();
+  const record = abuseMemory.get(key);
+  
+  if (!record) {
+    // Primeira tentativa
+    abuseMemory.set(key, { count: 1, firstAttempt: now });
+    return { isBlocked: false };
+  }
+  
+  // Se está bloqueado, verifica se já expirou
+  if (record.blockedUntil) {
+    if (now < record.blockedUntil) {
+      return { isBlocked: true, blockedUntil: record.blockedUntil };
+    } else {
+      // Bloqueio expirou, resetar
+      abuseMemory.set(key, { count: 1, firstAttempt: now });
+      return { isBlocked: false };
+    }
+  }
+  
+  // Verifica se a janela de 5 minutos expirou
+  if (now - record.firstAttempt > ABUSE_WINDOW_MS) {
+    // Resetar contagem
+    abuseMemory.set(key, { count: 1, firstAttempt: now });
+    return { isBlocked: false };
+  }
+  
+  // Incrementar contagem
+  record.count++;
+  
+  // Verificar se atingiu limite
+  if (record.count > ABUSE_PIX_LIMIT) {
+    record.blockedUntil = now + ABUSE_BLOCK_DURATION_MS;
+    console.warn(`[hoopay-pix] ABUSE MEMORY BLOCKED: ${key}, count: ${record.count}`);
+    return { isBlocked: true, blockedUntil: record.blockedUntil };
+  }
+  
+  abuseMemory.set(key, record);
+  return { isBlocked: false };
+}
+
 // Helper para chamadas RPC do Supabase
 async function supabaseRpc(
   supUrl: string,
@@ -528,13 +573,24 @@ serve(async (req) => {
   const supUrl = Deno.env.get("SUPABASE_URL");
   const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  // Verifica abuso antes de continuar
+  // === SISTEMA ANTI-SPAM EM MEMÓRIA (BACKUP PRINCIPAL) ===
+  const abuseKey = `abuse:${clientIp}:${fp}`;
+  const abuseCheckMemory = checkAbuseMemory(abuseKey);
+  if (abuseCheckMemory.isBlocked) {
+    console.warn(`[hoopay-pix] MEMORY BLOCK: ${abuseKey}, blocked until ${new Date(abuseCheckMemory.blockedUntil || 0).toISOString()}`);
+    return jsonResponse({ error: "Não foi possível gerar o pagamento. Tente novamente mais tarde." }, 503);
+  }
+
+  // Verifica abuso no Supabase também (camada extra)
   if (supUrl && svcKey) {
-    const abuseCheck = await checkAbuse(supUrl, svcKey, clientIp, fp);
-    if (abuseCheck.isBlocked) {
-      console.warn("[hoopay-pix] Abuso detectado:", { ip: clientIp, fp, blockedUntil: abuseCheck.blockedUntil });
-      // PUNIÇÃO DISCRETA: erro genérico sem revelar que está bloqueado
-      return jsonResponse({ error: "Não foi possível gerar o pagamento. Tente novamente mais tarde." }, 503);
+    try {
+      const abuseCheck = await checkAbuse(supUrl, svcKey, clientIp, fp);
+      if (abuseCheck.isBlocked) {
+        console.warn("[hoopay-pix] Supabase abuse block:", { ip: clientIp, fp, blockedUntil: abuseCheck.blockedUntil });
+        return jsonResponse({ error: "Não foi possível gerar o pagamento. Tente novamente mais tarde." }, 503);
+      }
+    } catch (e) {
+      console.error("[hoopay-pix] Supabase abuse check failed, using memory only:", e);
     }
   }
 
