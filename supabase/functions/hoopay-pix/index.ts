@@ -413,6 +413,65 @@ async function hoopayCharge(
   return { ok: false, status: lastStatus || 502, rawText: lastText || (lastErr?.message ?? "Unknown") };
 }
 
+// ============ FACEBOOK PIXEL CONVERSION API ============
+const FACEBOOK_PIXEL_ID = "1497055778126239";
+
+// Envia evento Donate para Facebook Pixel via Conversion API
+async function sendFacebookDonateEvent(
+  amount: number,
+  currency: string,
+  eventId: string,
+  eventTime: number
+): Promise<void> {
+  const accessToken = Deno.env.get("FACEBOOK_ACCESS_TOKEN");
+  if (!accessToken) {
+    console.warn("[Facebook Pixel] FACEBOOK_ACCESS_TOKEN not set, skipping event");
+    return;
+  }
+
+  const payload = {
+    data: [
+      {
+        event_name: "Donate",
+        event_time: eventTime,
+        event_id: eventId, // Deduplication key
+        action_source: "website",
+        user_data: {
+          // Hash de dados anônimos (obrigatório para CAPI)
+          client_ip_address: "0.0.0.0",
+          client_user_agent: "Deno/Edge Function",
+        },
+        custom_data: {
+          value: amount,
+          currency: currency,
+        },
+      },
+    ],
+  };
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${FACEBOOK_PIXEL_ID}/events?access_token=${accessToken}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[Facebook Pixel] Failed to send event:", errorText);
+    } else {
+      const result = await response.json();
+      console.log("[Facebook Pixel] Donate event sent:", { eventId, amount, currency, result });
+    }
+  } catch (error) {
+    console.error("[Facebook Pixel] Error sending event:", error);
+  }
+}
+// ============ END FACEBOOK PIXEL ============
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -454,6 +513,14 @@ serve(async (req) => {
       if (isPaid && amt > 0) {
         const supUrl = Deno.env.get("SUPABASE_URL");
         const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        
+        // === FACEBOOK PIXEL - EVENTO DONATE ===
+        // Envia evento apenas quando pagamento é confirmado
+        // Usa event_id para deduplicação (mesmo ID do webhook)
+        const fbEventId = eventId || `donate_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await sendFacebookDonateEvent(amt, "BRL", fbEventId, Math.floor(Date.now() / 1000));
+        // ======================================
+        
         if (supUrl && svcKey) {
           // Marca PIX como pago no cache (atualiza controle de abuso)
           const orderUuid = (body.orderUUID ?? body.order_uuid) as string;
