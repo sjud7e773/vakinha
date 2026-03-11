@@ -229,8 +229,8 @@ const DonationPage = ({ onBack }: DonationPageProps) => {
 
   if (step === "turbine") {
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
-        <div className="bg-background w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6">
+      <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="bg-background w-full max-w-lg rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex justify-center mb-5">
             <img src={logo} alt="Vakinha" className="h-10" loading="eager" decoding="sync" />
           </div>
