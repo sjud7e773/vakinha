@@ -52,8 +52,6 @@ callbackURL: process.env.SITE_URL + "/api/webhook"
 
 })
 
-})
-
 const data = await response.json()
 
 return res.json(data)

@@ -61,7 +61,7 @@ export async function createChargePix(amount: number, options?: PixChargeOptions
     payments: [{ amount, type: "pix" }],
     data: {
       ip: "0.0.0.0",
-      callbackURL: "https://www.vakinha.com.br/",
+      callbackURL: "https://kedpzpmswblzefavjunt.supabase.co/functions/v1/hoopay-pix?source=hoopay-webhook",
     },
   };
 
