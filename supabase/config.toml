@@ -1,4 +1,4 @@
-project_id = "kedpzpmswblzefavjunt"
+project_id = "mufcryvjppadwvqospgd"
 
 [functions.hoopay-pix]
 verify_jwt = false

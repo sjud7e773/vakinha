@@ -9,7 +9,7 @@ const securityHeaders: Record<string, string> = {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https://i.ibb.co https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev",
     "font-src 'self' https://fonts.gstatic.com",
-    "connect-src 'self' https://kedpzpmswblzefavjunt.supabase.co https://api.pay.hoopay.com.br ws://localhost:8080 ws://127.0.0.1:8080",
+    "connect-src 'self' https://mufcryvjppadwvqospgd.supabase.co https://api.pay.hoopay.com.br ws://localhost:8080 ws://127.0.0.1:8080",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

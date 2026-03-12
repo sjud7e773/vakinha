@@ -718,7 +718,7 @@ serve(async (req) => {
     payments: [{ amount, type: "pix" }],
     data: {
       ip: clientIp,
-      callbackURL: "https://kedpzpmswblzefavjunt.supabase.co/functions/v1/hoopay-pix?source=hoopay-webhook",
+      callbackURL: "https://mufcryvjppadwvqospgd.supabase.co/functions/v1/hoopay-pix?source=hoopay-webhook",
     },
   };
 

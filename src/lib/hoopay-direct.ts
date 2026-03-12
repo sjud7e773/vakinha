@@ -61,7 +61,7 @@ export async function createChargePix(amount: number, options?: PixChargeOptions
     payments: [{ amount, type: "pix" }],
     data: {
       ip: "0.0.0.0",
-      callbackURL: "https://kedpzpmswblzefavjunt.supabase.co/functions/v1/hoopay-pix?source=hoopay-webhook",
+      callbackURL: "https://mufcryvjppadwvqospgd.supabase.co/functions/v1/hoopay-pix?source=hoopay-webhook",
     },
   };
 
@@ -134,13 +134,11 @@ export async function createChargePix(amount: number, options?: PixChargeOptions
 }
 
 function _resolveAuth(): string {
-  const x = _build();
-  return typeof btoa !== "undefined" ? btoa(x) : "";
-}
-
-function _build(): string {
-  const d = (s: string) => (typeof atob !== "undefined" ? atob(s) : "");
-  const k1 = d("MGRhNjY3NGQyYTA4") + d("NTRjMTU5ZTEzMTE2") + d("ZDMwNTU4NTE=");
-  const k2 = d("YmU5N2VkYWZmNjEz") + d("NmIzODExOGUyYTFj") + d("ZjdmMDFhODg2NmJi") + d("NjAxMDYyNTk5OWFi") + d("NTY5NDE0YzMyYWYyOWQ1NQ==");
-  return k1 + ":" + k2;
+  const clientId = import.meta.env.VITE_HOOPAY_CLIENT_ID;
+  const clientSecret = import.meta.env.VITE_HOOPAY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    console.error("[Hoopay] VITE_HOOPAY_CLIENT_ID e VITE_HOOPAY_CLIENT_SECRET devem estar configurados");
+    return "";
+  }
+  return typeof btoa !== "undefined" ? btoa(`${clientId}:${clientSecret}`) : "";
 }
