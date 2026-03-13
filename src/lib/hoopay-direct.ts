@@ -47,64 +47,34 @@ export interface PixChargeOptions {
 }
 
 export async function createChargePix(amount: number, options?: PixChargeOptions): Promise<PixChargeResult> {
-  const auth = _resolveAuth();
-  // IMPORTANTE: NUNCA enviar is_heart_purchase ou heart_plan_id para API Hoopay
-  // Esses campos são apenas para uso interno da Edge Function
-  const body = {
-    amount,
-    customer: {
-      email: "doador@vakinha.com",
-      name: "Doador Anônimo",
-      phone: "11912345678",
-    },
-    products: [{ title: options?.isHeartPurchase ? "Corações" : "Doação", amount, quantity: 1 }],
-    payments: [{ amount, type: "pix" }],
-    data: {
-      ip: "0.0.0.0",
-      callbackURL: "https://mufcryvjppadwvqospgd.supabase.co/functions/v1/hoopay-pix?source=hoopay-webhook",
-    },
-  };
+  console.log("[createChargePix] Chamando API local /api/create-pix", { amount });
 
   try {
-    const res = await fetch(`${API_BASE}${CHARGE_ENDPOINT}`, {
+    const res = await fetch("/api/create-pix", {
       method: "POST",
       headers: {
-        Authorization: `Basic ${auth}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ amount }),
     });
 
-    const text = await res.text();
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      return {
-        success: false,
-        qr_code_base64: null,
-        copy_paste: null,
-        expires_at: null,
-        error: "Resposta inválida da API.",
-      };
-    }
+    console.log("[createChargePix] Resposta API local status:", res.status);
+
+    const data = await res.json();
+    console.log("[createChargePix] Resposta API local:", data);
 
     if (!res.ok) {
-      const errMsg =
-        (parsed.message as string) ??
-        (parsed.error as string) ??
-        text?.slice(0, 100) ??
-        "Erro ao criar cobrança.";
       return {
         success: false,
         qr_code_base64: null,
         copy_paste: null,
         expires_at: null,
-        error: String(errMsg),
+        error: data.details || data.error || "Erro ao criar PIX",
       };
     }
 
-    const pix = extractPixFromResponse(parsed);
+    // Extrair dados PIX da resposta Hoopay
+    const pix = extractPixFromResponse(data);
     if (!pix.qrCodeBase64 && !pix.copyPaste) {
       return {
         success: false,
@@ -123,6 +93,7 @@ export async function createChargePix(amount: number, options?: PixChargeOptions
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro de rede.";
+    console.error("[createChargePix] Erro:", e);
     return {
       success: false,
       qr_code_base64: null,
@@ -131,14 +102,4 @@ export async function createChargePix(amount: number, options?: PixChargeOptions
       error: msg,
     };
   }
-}
-
-function _resolveAuth(): string {
-  const clientId = import.meta.env.VITE_HOOPAY_CLIENT_ID;
-  const clientSecret = import.meta.env.VITE_HOOPAY_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    console.error("[Hoopay] VITE_HOOPAY_CLIENT_ID e VITE_HOOPAY_CLIENT_SECRET devem estar configurados");
-    return "";
-  }
-  return typeof btoa !== "undefined" ? btoa(`${clientId}:${clientSecret}`) : "";
 }
