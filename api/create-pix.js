@@ -40,10 +40,17 @@ export default async function handler(req, res) {
 
   const auth = Buffer.from(clientId + ":" + clientSecret).toString("base64");
   const callbackURL = siteUrl + "/api/webhook";
+  
+  // Capturar IP real do cliente
+  const clientIP = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "0.0.0.0";
 
-  console.log("[create-pix] Criando cobrança Hoopay...", { callbackURL });
+  console.log("[create-pix] Criando cobrança Hoopay...", { callbackURL, clientIP });
 
   const payload = {
+    customer: {
+      name: "Donor",
+      email: "donor@donation.com"
+    },
     products: [
       {
         title: "Doacao",
@@ -59,11 +66,11 @@ export default async function handler(req, res) {
     ],
     data: {
       callbackURL: callbackURL,
-      ip: "127.0.0.1"
+      ip: clientIP
     }
   };
 
-  const hoopayUrl = "https://api.pay.hoopay.com.br/charge";
+  const hoopayUrl = "https://api.pay.hoopay.com.br/charges";
   console.log("[create-pix] Endpoint Hoopay:", hoopayUrl);
   console.log("[create-pix] Payload enviado para Hoopay:", JSON.stringify(payload, null, 2));
 
