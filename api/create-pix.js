@@ -1,17 +1,54 @@
 export default async function handler(req, res) {
-  console.log("[create-pix] Request recebida", { method: req.method, body: req.body });
+  // Log inicial para confirmar que a função foi invocada
+  console.log("[create-pix] === FUNÇÃO INICIADA ===");
+  console.log("[create-pix] Timestamp:", new Date().toISOString());
+  console.log("[create-pix] Node version:", process.version);
+  
+  // Log de todas as propriedades do request
+  console.log("[create-pix] Request method:", req.method);
+  console.log("[create-pix] Request url:", req.url);
+  console.log("[create-pix] Request headers:", JSON.stringify(req.headers, null, 2));
+  
+  // Verificar Content-Type
+  const contentType = req.headers['content-type'] || '';
+  console.log("[create-pix] Content-Type:", contentType);
 
   if (req.method !== "POST") {
-    console.log("[create-pix] Método não permitido:", req.method);
-    return res.status(405).json({ error: "method not allowed" });
+    console.log("[create-pix] ERRO: Método não permitido:", req.method);
+    return res.status(405).json({ error: "method not allowed", allowed: ["POST"] });
   }
 
-  const { amount } = req.body;
-  console.log("[create-pix] Amount recebido:", amount);
+  // Parse body manualmente se necessário
+  let body = req.body;
+  if (!body && req.method === "POST") {
+    console.log("[create-pix] req.body vazio, tentando parse manual...");
+    // Body pode não estar parseado
+    try {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const rawBody = Buffer.concat(chunks).toString();
+      console.log("[create-pix] Raw body:", rawBody);
+      body = JSON.parse(rawBody);
+    } catch (e) {
+      console.error("[create-pix] Erro ao parse body:", e);
+    }
+  }
+  
+  console.log("[create-pix] Body parseado:", JSON.stringify(body, null, 2));
 
-  if (!amount || amount < 10) {
-    console.log("[create-pix] Valor inválido:", amount);
-    return res.status(400).json({ error: "valor mínimo é 10 reais" });
+  const { amount } = body || {};
+  console.log("[create-pix] Amount extraído:", amount, "tipo:", typeof amount);
+
+  if (!amount || typeof amount !== 'number' || amount < 10) {
+    console.log("[create-pix] ERRO: Valor inválido:", amount, "tipo:", typeof amount);
+    return res.status(400).json({ 
+      error: "valor invalido", 
+      details: "O valor deve ser um número maior ou igual a 10 reais",
+      received: amount,
+      type: typeof amount
+    });
   }
 
   // Verificar variáveis de ambiente
