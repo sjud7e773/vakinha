@@ -44,12 +44,6 @@ export default async function handler(req, res) {
   console.log("[create-pix] Criando cobrança Hoopay...", { callbackURL });
 
   const payload = {
-    customer: {
-      email: "pix@cliente.com",
-      name: "Cliente",
-      phone: "11999999999",
-      document: ""
-    },
     products: [
       {
         title: "Doacao",
@@ -64,15 +58,17 @@ export default async function handler(req, res) {
       }
     ],
     data: {
-      ip: "127.0.0.1",
-      callbackURL: callbackURL
+      callbackURL: callbackURL,
+      ip: "127.0.0.1"
     }
   };
 
-  console.log("[create-pix] Payload:", JSON.stringify(payload, null, 2));
+  const hoopayUrl = "https://api.pay.hoopay.com.br/charge";
+  console.log("[create-pix] Endpoint Hoopay:", hoopayUrl);
+  console.log("[create-pix] Payload enviado para Hoopay:", JSON.stringify(payload, null, 2));
 
   try {
-    const response = await fetch("https://api.pay.hoopay.com.br/charge", {
+    const response = await fetch(hoopayUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -89,8 +85,8 @@ export default async function handler(req, res) {
     if (!response.ok) {
       console.error("[create-pix] Erro Hoopay:", data);
       return res.status(response.status).json({
-        error: "hoopay request failed",
-        details: data.message || data.error || "Erro na API Hoopay",
+        error: "Hoopay error",
+        details: data,
         status: response.status
       });
     }
