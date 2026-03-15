@@ -70,15 +70,17 @@ export default async function handler(req, res) {
     }
   };
 
-  // Tentar endpoints alternativos da Hoopay
+  // Tentar endpoints alternativos da Hoopay com base na documentação
   const possibleEndpoints = [
-    "https://api.pay.hoopay.com.br/charge",
-    "https://api.pay.hoopay.com.br/charges", 
     "https://api.pay.hoopay.com.br/checkout",
     "https://api.pay.hoopay.com.br/checkout/pix",
-    "https://api.pay.hoopay.com.br/v1/charge",
-    "https://api.pay.hoopay.com.br/v1/charges",
-    "https://api.pay.hoopay.com.br/v1/checkout"
+    "https://api.pay.hoopay.com.br/v1/checkout",
+    "https://api.pay.hoopay.com.br/v1/checkout/pix",
+    "https://api.pay.hoopay.com.br/pix/checkout",
+    "https://api.pay.hoopay.com.br/payment",
+    "https://api.pay.hoopay.com.br/payment/pix",
+    "https://api.pay.hoopay.com.br/charge",
+    "https://api.pay.hoopay.com.br/charges"
   ];
 
   let response;
