@@ -70,42 +70,77 @@ export default async function handler(req, res) {
     }
   };
 
-  const hoopayUrl = "https://api.pay.hoopay.com.br/charges";
-  console.log("[create-pix] Endpoint Hoopay:", hoopayUrl);
-  console.log("[create-pix] Payload enviado para Hoopay:", JSON.stringify(payload, null, 2));
+  // Tentar endpoints alternativos da Hoopay
+  const possibleEndpoints = [
+    "https://api.pay.hoopay.com.br/charge",
+    "https://api.pay.hoopay.com.br/charges", 
+    "https://api.pay.hoopay.com.br/checkout",
+    "https://api.pay.hoopay.com.br/checkout/pix",
+    "https://api.pay.hoopay.com.br/v1/charge",
+    "https://api.pay.hoopay.com.br/v1/charges",
+    "https://api.pay.hoopay.com.br/v1/checkout"
+  ];
 
-  try {
-    const response = await fetch(hoopayUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Basic " + auth
-      },
-      body: JSON.stringify(payload)
-    });
-
-    console.log("[create-pix] Resposta Hoopay status:", response.status);
-
-    const data = await response.json();
-    console.log("[create-pix] Resposta Hoopay data:", JSON.stringify(data, null, 2));
-
-    if (!response.ok) {
-      console.error("[create-pix] Erro Hoopay:", data);
-      return res.status(response.status).json({
-        error: "Hoopay error",
-        details: data,
-        status: response.status
+  let response;
+  let workingEndpoint = null;
+  
+  for (const endpoint of possibleEndpoints) {
+    console.log("[create-pix] Testando endpoint:", endpoint);
+    
+    try {
+      const testResponse = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic " + auth
+        },
+        body: JSON.stringify(payload)
       });
+      
+      console.log(`[create-pix] Endpoint ${endpoint} status:`, testResponse.status);
+      
+      if (testResponse.status !== 404) {
+        response = testResponse;
+        workingEndpoint = endpoint;
+        console.log(`[create-pix] Endpoint funcionando encontrado: ${endpoint}`);
+        break;
+      }
+    } catch (error) {
+      console.log(`[create-pix] Erro ao testar ${endpoint}:`, error.message);
     }
-
-    console.log("[create-pix] PIX criado com sucesso!");
-    return res.json(data);
-
-  } catch (error) {
-    console.error("[create-pix] Erro inesperado:", error);
+  }
+  
+  if (!response || !workingEndpoint) {
+    console.error("[create-pix] Nenhum endpoint funcionou!");
     return res.status(500).json({
-      error: "internal server error",
-      details: error.message || "Erro desconhecido"
+      error: "Nenhum endpoint Hoopay disponível",
+      details: "Todos os endpoints testados retornaram 404",
+      testedEndpoints: possibleEndpoints
     });
   }
+
+  console.log("[create-pix] Endpoint Hoopay usado:", workingEndpoint);
+  console.log("[create-pix] Payload enviado:", JSON.stringify(payload, null, 2));
+  console.log("[create-pix] Headers enviados:", {
+    "Content-Type": "application/json",
+    "Authorization": "Basic " + auth.substring(0, 20) + "..."
+  });
+
+  console.log("[create-pix] Resposta Hoopay status:", response.status);
+
+  const data = await response.json();
+  console.log("[create-pix] Resposta Hoopay data:", JSON.stringify(data, null, 2));
+
+  if (!response.ok) {
+    console.error("[create-pix] Erro Hoopay:", data);
+    return res.status(response.status).json({
+      error: "Hoopay error",
+      details: data,
+      status: response.status,
+      endpoint: workingEndpoint
+    });
+  }
+
+  console.log("[create-pix] PIX criado com sucesso!");
+  return res.json(data);
 }
