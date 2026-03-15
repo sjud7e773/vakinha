@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
   console.log("[create-pix] Criando cobrança Hoopay...", { callbackURL, clientIP });
 
-  // Payload com products formatado para schema Hoopay
+  // Payload correto conforme Postman original
   const payload = {
     customer: {
       name: "Donor",
@@ -55,8 +55,8 @@ export default async function handler(req, res) {
     },
     products: [
       {
-        name: "Doacao",
-        unit_price: amount,
+        title: "Doacao",
+        price: amount,
         quantity: 1
       }
     ],
