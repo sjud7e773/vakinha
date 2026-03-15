@@ -46,10 +46,13 @@ export default async function handler(req, res) {
 
   console.log("[create-pix] Criando cobrança Hoopay...", { callbackURL, clientIP });
 
+  // Payload correto baseado no Postman da Hoopay
   const payload = {
     customer: {
       name: "Donor",
-      email: "donor@donation.com"
+      email: "donor@donation.com",
+      phone: "11999999999",
+      document: ""
     },
     products: [
       {
@@ -65,84 +68,70 @@ export default async function handler(req, res) {
       }
     ],
     data: {
-      callbackURL: callbackURL,
-      ip: clientIP
+      ip: clientIP,
+      callbackURL: callbackURL
     }
   };
 
-  // Tentar endpoints alternativos da Hoopay com base na documentação
-  const possibleEndpoints = [
-    "https://api.pay.hoopay.com.br/checkout",
-    "https://api.pay.hoopay.com.br/checkout/pix",
-    "https://api.pay.hoopay.com.br/v1/checkout",
-    "https://api.pay.hoopay.com.br/v1/checkout/pix",
-    "https://api.pay.hoopay.com.br/pix/checkout",
-    "https://api.pay.hoopay.com.br/payment",
-    "https://api.pay.hoopay.com.br/payment/pix",
-    "https://api.pay.hoopay.com.br/charge",
-    "https://api.pay.hoopay.com.br/charges"
-  ];
-
-  let response;
-  let workingEndpoint = null;
+  // Endpoint correto conforme Postman: POST /charge
+  const hoopayUrl = "https://api.pay.hoopay.com.br/charge";
   
-  for (const endpoint of possibleEndpoints) {
-    console.log("[create-pix] Testando endpoint:", endpoint);
-    
-    try {
-      const testResponse = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Basic " + auth
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      console.log(`[create-pix] Endpoint ${endpoint} status:`, testResponse.status);
-      
-      if (testResponse.status !== 404) {
-        response = testResponse;
-        workingEndpoint = endpoint;
-        console.log(`[create-pix] Endpoint funcionando encontrado: ${endpoint}`);
-        break;
-      }
-    } catch (error) {
-      console.log(`[create-pix] Erro ao testar ${endpoint}:`, error.message);
-    }
-  }
-  
-  if (!response || !workingEndpoint) {
-    console.error("[create-pix] Nenhum endpoint funcionou!");
-    return res.status(500).json({
-      error: "Nenhum endpoint Hoopay disponível",
-      details: "Todos os endpoints testados retornaram 404",
-      testedEndpoints: possibleEndpoints
-    });
-  }
-
-  console.log("[create-pix] Endpoint Hoopay usado:", workingEndpoint);
-  console.log("[create-pix] Payload enviado:", JSON.stringify(payload, null, 2));
+  console.log("[create-pix] Endpoint Hoopay:", hoopayUrl);
+  console.log("[create-pix] Payload enviado para Hoopay:", JSON.stringify(payload, null, 2));
   console.log("[create-pix] Headers enviados:", {
     "Content-Type": "application/json",
     "Authorization": "Basic " + auth.substring(0, 20) + "..."
   });
 
-  console.log("[create-pix] Resposta Hoopay status:", response.status);
+  try {
+    const response = await fetch(hoopayUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Basic " + auth
+      },
+      body: JSON.stringify(payload)
+    });
 
-  const data = await response.json();
-  console.log("[create-pix] Resposta Hoopay data:", JSON.stringify(data, null, 2));
+    console.log("[create-pix] Resposta Hoopay status:", response.status);
 
-  if (!response.ok) {
-    console.error("[create-pix] Erro Hoopay:", data);
-    return res.status(response.status).json({
-      error: "Hoopay error",
-      details: data,
-      status: response.status,
-      endpoint: workingEndpoint
+    const data = await response.json();
+    console.log("[create-pix] Resposta Hoopay data:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      console.error("[create-pix] Erro Hoopay:", data);
+      return res.status(response.status).json({
+        error: "Hoopay error",
+        details: data,
+        status: response.status
+      });
+    }
+
+    // Extrair dados PIX da resposta conforme Postman
+    const charge = data.payment?.charges?.[0];
+    if (!charge || !charge.pixPayload || !charge.pixQrCode) {
+      console.error("[create-pix] Dados PIX não encontrados na resposta:", charge);
+      return res.status(500).json({
+        error: "Dados PIX não encontrados",
+        details: "Resposta não contém pixPayload ou pixQrCode",
+        charge: charge
+      });
+    }
+
+    const pixData = {
+      pixPayload: charge.pixPayload,
+      pixQrCode: charge.pixQrCode,
+      expireAt: charge.expireAt,
+      orderUUID: data.orderUUID
+    };
+
+    console.log("[create-pix] PIX criado com sucesso!", pixData);
+    return res.json(pixData);
+  } catch (error) {
+    console.error("[create-pix] Erro ao criar PIX:", error.message);
+    return res.status(500).json({
+      error: "Erro ao criar PIX",
+      details: error.message
     });
   }
-
-  console.log("[create-pix] PIX criado com sucesso!");
-  return res.json(data);
 }
