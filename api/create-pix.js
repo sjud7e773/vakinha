@@ -46,11 +46,12 @@ export default async function handler(req, res) {
 
   console.log("[create-pix] Criando cobrança Hoopay...", { callbackURL, clientIP });
 
-  // Payload correto sem campos problemáticos
+  // Payload correto com phone obrigatório
   const payload = {
     customer: {
       name: "Donor",
-      email: "donor@donation.com"
+      email: "donor@donation.com",
+      phone: "11999999999"
     },
     products: [
       {
